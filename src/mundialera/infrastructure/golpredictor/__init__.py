@@ -1,0 +1,1 @@
+"""GolPredictor adapter."""

@@ -1,0 +1,211 @@
+from __future__ import annotations
+
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+from dataclasses import dataclass
+
+from mundialera.domain.models import Prediction, ResearchBrief, Scoreline
+from mundialera.domain.ports import PredictionModel
+
+
+class CodexPredictionError(RuntimeError):
+    """Raised when Codex CLI cannot produce a valid prediction."""
+
+
+@dataclass(frozen=True, slots=True)
+class CodexCliConfig:
+    executable: str
+    args: str
+    model: str | None
+    timeout_seconds: int
+
+
+class CodexCliPredictionModel(PredictionModel):
+    def __init__(
+        self,
+        config: CodexCliConfig,
+        *,
+        fallback: PredictionModel,
+        learning_memory: str = "",
+    ) -> None:
+        self._config = config
+        self._fallback = fallback
+        self._learning_memory = learning_memory
+
+    def predict(self, brief: ResearchBrief) -> Prediction:
+        prompt = _build_prediction_prompt(brief, learning_memory=self._learning_memory)
+        try:
+            payload = self._run_codex(prompt)
+            return _prediction_from_payload(brief, payload)
+        except (CodexPredictionError, OSError, subprocess.SubprocessError) as exc:
+            fallback = self._fallback.predict(brief)
+            return Prediction(
+                match=fallback.match,
+                primary=fallback.primary,
+                hedge=fallback.hedge,
+                confidence=min(fallback.confidence, 0.45),
+                rationale=[
+                    f"Codex CLI unavailable or invalid response: {exc.__class__.__name__}: {exc}",
+                    *fallback.rationale,
+                ],
+            )
+
+    def _run_codex(self, prompt: str) -> dict[str, object]:
+        args = _split_args(self._config.args)
+        if self._config.model:
+            args = _inject_model_arg(args, self._config.model)
+        command = _build_command(self._config.executable, args)
+        completed = subprocess.run(  # noqa: S603
+            command,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=self._config.timeout_seconds,
+            check=False,
+        )
+        if completed.returncode != 0:
+            stderr = completed.stderr.strip()[-500:]
+            raise CodexPredictionError(f"codex exit={completed.returncode}: {stderr}")
+        return _extract_json_object(completed.stdout)
+
+
+def _split_args(value: str) -> list[str]:
+    if not value.strip():
+        return []
+    return shlex.split(value, posix=os.name != "nt")
+
+
+def _build_command(executable: str, args: list[str]) -> list[str]:
+    resolved = shutil.which(executable) or executable
+    if os.name == "nt" and resolved.lower().endswith((".cmd", ".bat")):
+        return ["cmd.exe", "/c", resolved, *args]
+    return [resolved, *args]
+
+
+def _inject_model_arg(args: list[str], model: str) -> list[str]:
+    if not args:
+        return ["--model", model]
+    try:
+        prompt_index = args.index("-")
+    except ValueError:
+        return [*args, "--model", model]
+    return [*args[:prompt_index], "--model", model, *args[prompt_index:]]
+
+
+def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> str:
+    match = brief.match
+    context = {
+        "match": {
+            "id": match.match_id,
+            "group": match.group,
+            "kickoff": match.kickoff.isoformat() if match.kickoff else None,
+            "home": match.home.name,
+            "away": match.away.name,
+            "current_prediction": match.prediction.label() if match.prediction else None,
+            "result": match.result.label() if match.result else None,
+            "points": match.points,
+        },
+        "evidence": brief.evidence,
+        "structured_evidence": [
+            {
+                "category": item.category.value,
+                "title": item.title,
+                "summary": item.summary,
+                "url": item.url,
+                "source": item.source,
+                "tier": item.tier.value,
+                "confidence": item.confidence,
+            }
+            for item in brief.structured_evidence
+        ],
+        "uncertainty": brief.uncertainty,
+    }
+    return (
+        "Eres Codex actuando como motor final de prediccion para una polla del Mundial.\n"
+        "Usa razonamiento riguroso con toda la evidencia entregada: actualidad deportiva, "
+        "alineaciones, lesionados, suplentes, tecnicos, tactica, sede, clima, cancha, "
+        "historial, ranking/ELO, cuotas, tabla, incentivos, emociones de mundial y sesgos.\n"
+        "Prioriza evidencia estructurada con mayor tier/confidence y degrada fuentes genericas, "
+        "duplicadas, viejas o contradictorias.\n"
+        "No inventes hechos no soportados; si falta informacion, reflejalo en confidence.\n"
+        "Devuelve SOLO JSON valido, sin markdown, con este esquema exacto:\n"
+        "{"
+        '"primary":{"home":0,"away":0},'
+        '"hedge":{"home":0,"away":0},'
+        '"confidence":0.0,'
+        '"rationale":["razon 1","razon 2"],'
+        '"risk_flags":["riesgo 1"],'
+        '"evidence_gaps":["gap 1"]'
+        "}\n"
+        "Reglas: goles enteros entre 0 y 9; confidence entre 0 y 1; primary es el marcador "
+        "a guardar en GolPredictor; hedge es alternativa si se busca cubrir riesgo.\n"
+        f"MEMORIA_APRENDIZAJE:\n{learning_memory or 'Sin memoria aun.'}\n"
+        f"CONTEXTO_JSON:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
+    )
+
+
+def _prediction_from_payload(brief: ResearchBrief, payload: dict[str, object]) -> Prediction:
+    primary = _scoreline_from_payload(payload.get("primary"))
+    hedge = _scoreline_from_payload(payload.get("hedge"))
+    confidence_raw = payload.get("confidence")
+    if not isinstance(confidence_raw, int | float):
+        raise CodexPredictionError("confidence missing or not numeric")
+    confidence = max(0.0, min(1.0, float(confidence_raw)))
+    rationale = _string_list(payload.get("rationale"))
+    risk_flags = _string_list(payload.get("risk_flags"))
+    evidence_gaps = _string_list(payload.get("evidence_gaps"))
+    if risk_flags:
+        rationale.append("Riesgos: " + "; ".join(risk_flags))
+    if evidence_gaps:
+        rationale.append("Gaps de evidencia: " + "; ".join(evidence_gaps))
+    return Prediction(
+        match=brief.match,
+        primary=primary,
+        hedge=hedge,
+        confidence=round(confidence, 2),
+        rationale=["Codex CLI prediction engine.", *rationale],
+    )
+
+
+def _scoreline_from_payload(value: object) -> Scoreline:
+    if not isinstance(value, dict):
+        raise CodexPredictionError("scoreline missing or invalid")
+    home = value.get("home")
+    away = value.get("away")
+    if not isinstance(home, int) or not isinstance(away, int):
+        raise CodexPredictionError("scoreline goals must be integers")
+    if home > 9 or away > 9:
+        raise CodexPredictionError("scoreline goals out of accepted range")
+    return Scoreline(home=home, away=away)
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _extract_json_object(output: str) -> dict[str, object]:
+    stripped = output.strip()
+    try:
+        parsed = json.loads(stripped)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    matches = re.findall(r"\{(?:.|\n)*\}", stripped)
+    for candidate in reversed(matches):
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    raise CodexPredictionError("no JSON object found in Codex output")
