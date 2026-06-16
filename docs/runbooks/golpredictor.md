@@ -53,8 +53,11 @@ instead:
 The task runs `scripts/windows/run-autonomous.ps1`, which:
 
 - uses `.env` for credentials and Codex config
-- installs/refreshes the editable package
+- reuses the existing editable install when `mundialera` already imports
+- installs/refreshes the editable package only when missing, or when launched with `-RefreshInstall`
 - starts `pmundialera run watch --interval-seconds 60 --submit`
+- runs each autonomous cycle through a PowerShell watchdog so a hung Python call is
+  killed after `-CycleTimeoutSeconds` and the next interval can continue
 - settles completed predictions and updates learning memory every cycle
 - writes local logs under `.logs/`
 - uses a named mutex so duplicate watchers do not run
