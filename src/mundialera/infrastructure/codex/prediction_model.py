@@ -126,13 +126,28 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         ],
         "uncertainty": brief.uncertainty,
     }
+    if brief.calibration is not None:
+        context["calibration"] = {
+            "evidence_quality": brief.calibration.evidence_quality,
+            "missing_categories": [
+                category.value for category in brief.calibration.missing_categories
+            ],
+            "risk_flags": brief.calibration.risk_flags,
+            "draw_risk": brief.calibration.draw_risk,
+            "favorite_bias_risk": brief.calibration.favorite_bias_risk,
+        }
     return (
         "Eres Codex actuando como motor final de prediccion para una polla del Mundial.\n"
         "Usa razonamiento riguroso con toda la evidencia entregada: actualidad deportiva, "
         "alineaciones, lesionados, suplentes, tecnicos, tactica, sede, clima, cancha, "
         "historial, ranking/ELO, cuotas, tabla, incentivos, emociones de mundial y sesgos.\n"
+        "Antes del marcador evalua probabilidad de empate, under/over, ambos anotan, "
+        "porteros/atajadas, balon parado, logistica, varianza de debut y sesgo de favorito.\n"
         "Prioriza evidencia estructurada con mayor tier/confidence y degrada fuentes genericas, "
         "duplicadas, viejas o contradictorias.\n"
+        "La seccion calibration es obligatoria: si draw_risk o favorite_bias_risk son altos, "
+        "no uses marcadores comodos del favorito sin justificar datos de calidad de tiro, "
+        "portero, balon parado y conversion.\n"
         "No inventes hechos no soportados; si falta informacion, reflejalo en confidence.\n"
         "Devuelve SOLO JSON valido, sin markdown, con este esquema exacto:\n"
         "{"

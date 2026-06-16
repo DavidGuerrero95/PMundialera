@@ -23,6 +23,7 @@ class EvidenceCategory(StrEnum):
     GOALKEEPERS_DEFENSE = "goalkeepers_defense"
     SET_PIECES = "set_pieces"
     PLAYER_CONTEXT = "player_context"
+    RECENT_MATCH_STATS = "recent_match_stats"
     NEWS = "news"
 
 
@@ -84,6 +85,7 @@ class ResearchBrief:
     evidence: list[str] = field(default_factory=list)
     structured_evidence: list[EvidenceItem] = field(default_factory=list)
     uncertainty: list[str] = field(default_factory=list)
+    calibration: PredictionCalibration | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +101,26 @@ class EvidenceItem:
     def __post_init__(self) -> None:
         if not 0.0 <= self.confidence <= 1.0:
             msg = "Evidence confidence must be between 0.0 and 1.0"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class PredictionCalibration:
+    evidence_quality: float
+    missing_categories: list[EvidenceCategory] = field(default_factory=list)
+    risk_flags: list[str] = field(default_factory=list)
+    draw_risk: float = 0.0
+    favorite_bias_risk: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.evidence_quality <= 1.0:
+            msg = "Evidence quality must be between 0.0 and 1.0"
+            raise ValueError(msg)
+        if not 0.0 <= self.draw_risk <= 1.0:
+            msg = "Draw risk must be between 0.0 and 1.0"
+            raise ValueError(msg)
+        if not 0.0 <= self.favorite_bias_risk <= 1.0:
+            msg = "Favorite bias risk must be between 0.0 and 1.0"
             raise ValueError(msg)
 
 

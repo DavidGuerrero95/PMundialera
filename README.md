@@ -227,8 +227,10 @@ El research de produccion combina evidencia web deduplicada, scraping HTML limit
 puntuacion por fuente con los subagentes de analisis. Las fuentes oficiales y medios
 reconocidos pesan mas que agregadores o snippets genericos; si faltan alineaciones,
 lesionados, jugadores clave, minutos recientes, noticias personales/profesionales, cuotas,
-ranking, clima, sede, arbitro o contexto reciente, el prompt exige reflejarlo como gap de
-evidencia.
+ranking, clima, sede, arbitro, xG/tiros, atajadas, corners, balon parado, under/over,
+ambos anotan o contexto reciente, el prompt exige reflejarlo como gap de evidencia.
+Ademas calcula una calibracion explicita de riesgo de empate, sesgo por favorito,
+calidad de evidencia y categorias faltantes antes de seleccionar marcador.
 
 Subagentes actuales:
 

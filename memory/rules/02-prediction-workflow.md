@@ -12,6 +12,8 @@ For each match, collect or synthesize:
 - Historical head-to-head without over-weighting stale results.
 - World Cup pressure, social, emotional, and tournament incentives.
 - Recent tournament results to avoid single-source bias.
+- Recent match stats, shots, shots on target, goalkeeper saves, corners, set-piece
+  goals, under/over profile, both-teams-to-score profile, and draw probability.
 - Ranking/ELO and squad quality gap.
 - Market odds and public bias.
 - Referee, cards, penalties, and discipline.
@@ -25,6 +27,12 @@ Research evidence should be deduplicated, enriched with bounded HTML scraping
 when pages are safely reachable, and scored by source quality. Prefer official
 sources and recognized media over aggregators or generic snippets, and carry
 evidence gaps into the final confidence instead of inventing missing facts.
+
+Before final score selection, produce calibration signals for draw risk,
+favorite-bias risk, missing categories, and evidence quality. A strong market or
+ranking favorite must be counterweighted by goalkeeper, defensive, set-piece,
+recent-stat, logistics, and conditions evidence before using a comfortable
+favorite scoreline.
 
 ## Final engine
 

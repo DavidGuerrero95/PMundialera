@@ -3,8 +3,18 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from mundialera.domain.models import Match, ResearchBrief, Team
-from mundialera.infrastructure.codex.prediction_model import CodexCliConfig, CodexCliPredictionModel
+from mundialera.domain.models import (
+    EvidenceCategory,
+    Match,
+    PredictionCalibration,
+    ResearchBrief,
+    Team,
+)
+from mundialera.infrastructure.codex.prediction_model import (
+    CodexCliConfig,
+    CodexCliPredictionModel,
+    _build_prediction_prompt,
+)
 
 
 class FailingFallback:
@@ -43,3 +53,25 @@ def test_codex_cli_prediction_model_parses_json_response(tmp_path: Path) -> None
     assert prediction.hedge.label() == "1 - 1"
     assert prediction.confidence == 0.71
     assert prediction.rationale[0] == "Codex CLI prediction engine."
+
+
+def test_codex_prompt_includes_calibration_payload() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("A"), away=Team("B"))
+    brief = ResearchBrief(
+        match=match,
+        evidence=["market favorite"],
+        uncertainty=[],
+        calibration=PredictionCalibration(
+            evidence_quality=0.42,
+            missing_categories=[EvidenceCategory.RECENT_MATCH_STATS],
+            risk_flags=["Market signal lacks recent match-stat counterweight."],
+            draw_risk=0.58,
+            favorite_bias_risk=0.61,
+        ),
+    )
+
+    prompt = _build_prediction_prompt(brief, learning_memory="")
+
+    assert '"calibration"' in prompt
+    assert '"draw_risk": 0.58' in prompt
+    assert "no uses marcadores comodos del favorito" in prompt

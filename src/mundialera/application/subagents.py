@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
+from mundialera.application.calibration import calibrate_research_brief
 from mundialera.domain.models import EvidenceItem, Match, Prediction, ResearchBrief, Scoreline
 from mundialera.domain.ports import PredictionModel, ResearchAgent
 
@@ -20,11 +21,13 @@ class CompositeResearchAgent:
             evidence.extend(brief.evidence)
             structured_evidence.extend(brief.structured_evidence)
             uncertainty.extend(brief.uncertainty)
-        return ResearchBrief(
-            match=match,
-            evidence=evidence,
-            structured_evidence=structured_evidence,
-            uncertainty=uncertainty,
+        return calibrate_research_brief(
+            ResearchBrief(
+                match=match,
+                evidence=evidence,
+                structured_evidence=structured_evidence,
+                uncertainty=uncertainty,
+            )
         )
 
 
@@ -64,11 +67,39 @@ class HeuristicPredictionModel(PredictionModel):
         hedge = self._hedge(primary)
         uncertainty_penalty = min(0.25, len(brief.uncertainty) * 0.02)
         evidence_bonus = min(0.12, len(brief.evidence) * 0.005)
-        confidence = max(0.35, min(0.82, 0.62 + evidence_bonus - uncertainty_penalty))
+        calibration_penalty = 0.0
+        if brief.calibration is not None:
+            calibration_penalty = min(
+                0.24,
+                (1.0 - brief.calibration.evidence_quality) * 0.12
+                + brief.calibration.draw_risk * 0.06
+                + brief.calibration.favorite_bias_risk * 0.06,
+            )
+            if (
+                brief.calibration.draw_risk >= 0.42
+                and primary.home != primary.away
+                and abs(primary.home - primary.away) <= 1
+            ):
+                hedge = Scoreline(
+                    home=min(primary.home, primary.away),
+                    away=min(primary.home, primary.away),
+                )
+        confidence = max(
+            0.35,
+            min(0.82, 0.62 + evidence_bonus - uncertainty_penalty - calibration_penalty),
+        )
         rationale = [
             "Base heuristica deterministica calibrada por equipos y pronostico previo.",
             *brief.evidence[:10],
         ]
+        if brief.calibration is not None:
+            rationale.append(
+                "Calibracion: "
+                f"quality={brief.calibration.evidence_quality:.2f}, "
+                f"draw_risk={brief.calibration.draw_risk:.2f}, "
+                f"favorite_bias={brief.calibration.favorite_bias_risk:.2f}."
+            )
+            rationale.extend(brief.calibration.risk_flags[:4])
         if brief.uncertainty:
             rationale.append("Incertidumbres activas: " + "; ".join(brief.uncertainty[:6]))
         return Prediction(

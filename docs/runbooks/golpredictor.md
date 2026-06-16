@@ -82,9 +82,12 @@ unless `PMUNDIALERA_SUBMISSION_WINDOW_MINUTES` is overridden.
 
 Production research uses categorized web queries for availability, individual player context,
 personal/professional news, tactics, venue/weather, form, news, market, ranking,
-referee/discipline, table incentives, rest/travel, goalkeepers/defense, and set pieces.
+referee/discipline, table incentives, rest/travel, goalkeepers/defense, recent match stats,
+under/over, both-teams-to-score, corners, and set pieces.
 Results are deduplicated, enriched with bounded HTML scraping when reachable, and scored by
 source tier before the final Codex prompt is built.
+Each prediction receives calibration signals for draw risk, favorite-bias risk,
+missing evidence categories, and evidence quality.
 
 ## Feedback loop
 

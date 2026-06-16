@@ -45,7 +45,7 @@ class Settings(BaseSettings):
         validation_alias="PMUNDIALERA_ENABLE_WEB_RESEARCH",
     )
     pmundialera_max_research_queries: int = Field(
-        default=14,
+        default=18,
         ge=1,
         le=20,
         validation_alias="PMUNDIALERA_MAX_RESEARCH_QUERIES",

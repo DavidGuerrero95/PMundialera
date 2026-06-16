@@ -53,6 +53,7 @@ def build_learning_memory(outcomes: list[PredictionOutcome]) -> str:
             "No settled predictions yet. Prefer conservative confidence and explain uncertainty."
         )
 
+    outcomes = _latest_outcomes_by_group_match(outcomes)
     total = len(outcomes)
     exact = sum(1 for item in outcomes if item.exact_ok)
     winner = sum(1 for item in outcomes if item.winner_ok)
@@ -153,8 +154,28 @@ def _error_patterns(outcomes: list[PredictionOutcome]) -> list[str]:
             counter["The model underestimated away-team goals."] += 1
         if not item.winner_ok:
             counter["The model missed winner/draw classification."] += 1
+        if _winner(item.actual) == "draw" and _winner(item.predicted) != "draw":
+            counter[
+                "The model missed a draw; raise draw-risk calibration for similar matches."
+            ] += 1
+        if _winner(item.predicted) != "draw" and _margin(item.predicted) > _margin(item.actual):
+            counter["The model overestimated the favorite margin."] += 1
         if item.winner_ok and not item.exact_ok:
             counter["Winner was right but exact score was off."] += 1
     if not counter:
         return ["No dominant error pattern yet."]
     return [f"{label} ({count}x)" for label, count in counter.most_common(5)]
+
+
+def _latest_outcomes_by_group_match(outcomes: list[PredictionOutcome]) -> list[PredictionOutcome]:
+    latest: dict[tuple[str, str], PredictionOutcome] = {}
+    for outcome in outcomes:
+        key = (outcome.group, outcome.match_id)
+        current = latest.get(key)
+        if current is None or outcome.settled_at >= current.settled_at:
+            latest[key] = outcome
+    return list(latest.values())
+
+
+def _margin(score: Scoreline) -> int:
+    return abs(score.home - score.away)

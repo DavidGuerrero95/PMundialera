@@ -217,12 +217,24 @@ class WebSearchResearchAgent(ResearchAgent):
                 "forma reciente ultimos partidos",
             ),
             QuerySpec(
+                EvidenceCategory.RECENT_MATCH_STATS,
+                f"{label} xG tiros atajadas corners estadisticas recientes seleccion",
+            ),
+            QuerySpec(
+                EvidenceCategory.RECENT_MATCH_STATS,
+                f"{label} ambos anotan under over goles esperados ultimos partidos",
+            ),
+            QuerySpec(
                 EvidenceCategory.NEWS,
                 f"{label} noticias recientes hoy previa pronostico marcador mundial 2026",
             ),
             QuerySpec(
                 EvidenceCategory.MARKET,
                 f"{label} cuotas apuestas probabilidades mercado mundial 2026",
+            ),
+            QuerySpec(
+                EvidenceCategory.MARKET,
+                f"{label} odds draw under over both teams score movimiento mercado",
             ),
             QuerySpec(
                 EvidenceCategory.RANKING,
@@ -242,11 +254,11 @@ class WebSearchResearchAgent(ResearchAgent):
             ),
             QuerySpec(
                 EvidenceCategory.GOALKEEPERS_DEFENSE,
-                f"{label} porteros defensa centrales bajas defensivas mundial 2026",
+                f"{label} porteros atajadas saves defensa centrales bajas defensivas mundial 2026",
             ),
             QuerySpec(
                 EvidenceCategory.SET_PIECES,
-                f"{label} balon parado corners tiros libres juego aereo mundial 2026",
+                f"{label} balon parado corners goles corner tiros libres juego aereo mundial 2026",
             ),
         ]
 
@@ -339,8 +351,10 @@ def _source_tier(source: str) -> SourceTier:
         "11v11.com",
         "flashscore.com",
         "oddsportal.com",
+        "fbref.com",
         "soccerway.com",
         "sofascore.com",
+        "statbunker.com",
         "transfermarkt.com",
         "worldfootball.net",
     )

@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from mundialera.application.feedback import FeedbackService
+from mundialera.application.feedback import FeedbackService, build_learning_memory
 from mundialera.domain.models import Match, Prediction, Scoreline, SubmissionResult, Team
 from mundialera.infrastructure.local_store.history import JsonlPredictionStore
 
@@ -65,4 +65,113 @@ def test_feedback_settles_submitted_prediction_and_writes_memory(tmp_path: Path)
     outcomes = store.load_outcomes()
     assert outcomes[0].winner_ok is True
     assert outcomes[0].away_goals_ok is False
+    assert "Settled predictions: 1" in store.load_learning_memory()
+
+
+def test_learning_memory_flags_missed_draw_pattern(tmp_path: Path) -> None:
+    store = JsonlPredictionStore(tmp_path, timezone_name="America/Bogota")
+    match = Match(
+        match_id="1",
+        kickoff=None,
+        home=Team("Saudi Arabia"),
+        away=Team("Uruguay"),
+        group="Mundial CoreX",
+    )
+    prediction = Prediction(
+        match=match,
+        primary=Scoreline(0, 2),
+        hedge=Scoreline(1, 2),
+        confidence=0.67,
+        rationale=["favorite margin"],
+    )
+    store.record_prediction(
+        prediction,
+        SubmissionResult(
+            match=match,
+            scoreline=prediction.primary,
+            submitted=True,
+            dry_run=False,
+            message="submitted",
+        ),
+    )
+    service = FeedbackService(
+        fixtures=type(
+            "DrawFixtures",
+            (),
+            {
+                "list_matches": lambda self, group_name: [
+                    Match(
+                        match_id="1",
+                        kickoff=None,
+                        home=Team("Saudi Arabia"),
+                        away=Team("Uruguay"),
+                        group=group_name,
+                        result=Scoreline(1, 1),
+                        points=0,
+                    )
+                ]
+            },
+        )(),
+        store=store,
+        now=datetime(2026, 6, 15, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    service.settle_groups(["Mundial CoreX"])
+    memory = build_learning_memory(store.load_outcomes())
+
+    assert "missed a draw" in memory
+    assert "overestimated the favorite margin" in memory
+
+
+def test_learning_memory_deduplicates_repeated_same_group_match_outcomes(tmp_path: Path) -> None:
+    store = JsonlPredictionStore(tmp_path, timezone_name="America/Bogota")
+    match = Match(
+        match_id="13",
+        kickoff=None,
+        home=Team("Saudi Arabia"),
+        away=Team("Uruguay"),
+        group="Mundial CoreX",
+    )
+    for _ in range(3):
+        prediction = Prediction(
+            match=match,
+            primary=Scoreline(0, 2),
+            hedge=Scoreline(1, 2),
+            confidence=0.67,
+            rationale=["favorite margin"],
+        )
+        store.record_prediction(
+            prediction,
+            SubmissionResult(
+                match=match,
+                scoreline=prediction.primary,
+                submitted=True,
+                dry_run=False,
+                message="submitted",
+            ),
+        )
+    service = FeedbackService(
+        fixtures=type(
+            "DrawFixtures",
+            (),
+            {
+                "list_matches": lambda self, group_name: [
+                    Match(
+                        match_id="13",
+                        kickoff=None,
+                        home=Team("Saudi Arabia"),
+                        away=Team("Uruguay"),
+                        group=group_name,
+                        result=Scoreline(1, 1),
+                        points=0,
+                    )
+                ]
+            },
+        )(),
+        store=store,
+        now=datetime(2026, 6, 15, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    service.settle_groups(["Mundial CoreX"])
+
     assert "Settled predictions: 1" in store.load_learning_memory()
