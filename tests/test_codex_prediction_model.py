@@ -7,6 +7,7 @@ from mundialera.domain.models import (
     EvidenceCategory,
     Match,
     PredictionCalibration,
+    ProbabilityProfile,
     ResearchBrief,
     Team,
 )
@@ -68,10 +69,22 @@ def test_codex_prompt_includes_calibration_payload() -> None:
             draw_risk=0.58,
             favorite_bias_risk=0.61,
         ),
+        probability_profile=ProbabilityProfile(
+            home_win=0.28,
+            draw=0.34,
+            away_win=0.38,
+            over_2_5=0.41,
+            both_teams_to_score=0.52,
+            expected_home_goals=1.05,
+            expected_away_goals=1.22,
+        ),
     )
 
     prompt = _build_prediction_prompt(brief, learning_memory="")
 
     assert '"calibration"' in prompt
+    assert '"probability_profile"' in prompt
     assert '"draw_risk": 0.58' in prompt
+    assert '"expected_home_goals": 1.05' in prompt
     assert "no uses marcadores comodos del favorito" in prompt
+    assert "Usa probability_profile como baseline numerico" in prompt

@@ -136,6 +136,16 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
             "draw_risk": brief.calibration.draw_risk,
             "favorite_bias_risk": brief.calibration.favorite_bias_risk,
         }
+    if brief.probability_profile is not None:
+        context["probability_profile"] = {
+            "home_win": brief.probability_profile.home_win,
+            "draw": brief.probability_profile.draw,
+            "away_win": brief.probability_profile.away_win,
+            "over_2_5": brief.probability_profile.over_2_5,
+            "both_teams_to_score": brief.probability_profile.both_teams_to_score,
+            "expected_home_goals": brief.probability_profile.expected_home_goals,
+            "expected_away_goals": brief.probability_profile.expected_away_goals,
+        }
     return (
         "Eres Codex actuando como motor final de prediccion para una polla del Mundial.\n"
         "Usa razonamiento riguroso con toda la evidencia entregada: actualidad deportiva, "
@@ -148,6 +158,8 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         "La seccion calibration es obligatoria: si draw_risk o favorite_bias_risk son altos, "
         "no uses marcadores comodos del favorito sin justificar datos de calidad de tiro, "
         "portero, balon parado y conversion.\n"
+        "Usa probability_profile como baseline numerico: primero decide 1X2/empate, "
+        "over/under, ambos anotan y goles esperados; despues deriva el marcador exacto.\n"
         "No inventes hechos no soportados; si falta informacion, reflejalo en confidence.\n"
         "Devuelve SOLO JSON valido, sin markdown, con este esquema exacto:\n"
         "{"
@@ -185,6 +197,7 @@ def _prediction_from_payload(brief: ResearchBrief, payload: dict[str, object]) -
         hedge=hedge,
         confidence=round(confidence, 2),
         rationale=["Codex CLI prediction engine.", *rationale],
+        probabilities=brief.probability_profile,
     )
 
 

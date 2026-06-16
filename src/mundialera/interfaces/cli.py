@@ -114,6 +114,8 @@ def predict(
             "primary": prediction.primary.label(),
             "hedge": prediction.hedge.label(),
             "confidence": prediction.confidence,
+            "probabilities": _probabilities_to_dict(prediction),
+            "decision_flags": prediction.decision_flags,
             "rationale": prediction.rationale,
         }
     )
@@ -135,16 +137,7 @@ def run_window(
             json.dumps(
                 {
                     "group": result.group_name,
-                    "evaluated": [
-                        {
-                            "match": item.match.label,
-                            "primary": item.primary.label(),
-                            "hedge": item.hedge.label(),
-                            "confidence": item.confidence,
-                            "rationale": item.rationale,
-                        }
-                        for item in result.evaluated
-                    ],
+                    "evaluated": [_prediction_to_dict(item) for item in result.evaluated],
                     "submitted": [
                         {
                             "match": item.match.label,
@@ -326,7 +319,23 @@ def _prediction_to_dict(prediction: Prediction) -> dict[str, object]:
         "primary": prediction.primary.label(),
         "hedge": prediction.hedge.label(),
         "confidence": prediction.confidence,
+        "probabilities": _probabilities_to_dict(prediction),
+        "decision_flags": prediction.decision_flags,
         "rationale": prediction.rationale,
+    }
+
+
+def _probabilities_to_dict(prediction: Prediction) -> dict[str, float] | None:
+    if prediction.probabilities is None:
+        return None
+    return {
+        "home_win": prediction.probabilities.home_win,
+        "draw": prediction.probabilities.draw,
+        "away_win": prediction.probabilities.away_win,
+        "over_2_5": prediction.probabilities.over_2_5,
+        "both_teams_to_score": prediction.probabilities.both_teams_to_score,
+        "expected_home_goals": prediction.probabilities.expected_home_goals,
+        "expected_away_goals": prediction.probabilities.expected_away_goals,
     }
 
 

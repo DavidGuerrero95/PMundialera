@@ -91,6 +91,26 @@ Results are deduplicated, enriched with bounded HTML scraping when reachable, an
 source tier before the final Codex prompt is built.
 Each prediction receives calibration signals for draw risk, favorite-bias risk,
 missing evidence categories, and evidence quality.
+Before submission, the application derives an auditable probability profile
+for home/draw/away, over 2.5, both-teams-to-score, and expected goals. The final
+scoreline is checked by decision guardrails that cap confidence, reduce
+unsupported favorite margins, and force a draw hedge when draw risk is high.
+
+## Pre-submit verification
+
+Use these commands before a matchday window:
+
+```powershell
+pmundialera golpredictor login-check
+pmundialera golpredictor groups
+pmundialera run schedule
+pmundialera run next --limit 4 --json
+pmundialera run once --dry-run --json
+```
+
+The JSON preview should include `probabilities`, `decision_flags`, `primary`,
+`hedge`, and `confidence`. A real `--submit` run still writes only inside the
+configured 35-minute window.
 
 ## Feedback loop
 
@@ -99,6 +119,10 @@ The local feedback files live under `.pmundialera/`:
 - `predictions.jsonl`: predictions generated during submission windows
 - `outcomes.jsonl`: settled predictions after GolPredictor publishes results
 - `learning-memory.md`: compact lessons injected into future Codex prompts
+
+`predictions.jsonl` is an append-only operational event log for prediction
+decisions. New records include probabilities and guardrail flags so future
+analysis can improve calibration without overfitting to one match.
 
 Commands:
 

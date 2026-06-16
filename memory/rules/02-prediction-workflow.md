@@ -34,6 +34,15 @@ ranking favorite must be counterweighted by goalkeeper, defensive, set-piece,
 recent-stat, logistics, and conditions evidence before using a comfortable
 favorite scoreline.
 
+Prediction selection must be probability-first. Estimate home/draw/away,
+over/under, both-teams-to-score, and expected goals before deriving the exact
+scoreline. Use learning memory as a weak prior, especially with small samples;
+do not memorize one-off team results or overfit a single settled match.
+
+Before submission, apply decision guardrails that cap confidence for weak
+evidence, reduce unsupported comfortable favorite margins, and add a draw hedge
+when draw risk is high.
+
 ## Final engine
 
 The platform collects and structures context. The final score decision belongs

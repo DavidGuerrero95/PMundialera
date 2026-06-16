@@ -209,6 +209,8 @@ El sistema construye un prompt con:
 - evidencia web
 - historico visible en GolPredictor
 - incertidumbres de los subagentes
+- perfil probabilistico 1X2, over/under, ambos anotan y goles esperados
+- calibracion de evidencia, empate y sesgo de favorito
 - reglas de salida JSON
 
 Codex debe devolver:
@@ -236,6 +238,14 @@ ranking, clima, sede, arbitro, xG/tiros, atajadas, corners, balon parado, under/
 ambos anotan o contexto reciente, el prompt exige reflejarlo como gap de evidencia.
 Ademas calcula una calibracion explicita de riesgo de empate, sesgo por favorito,
 calidad de evidencia y categorias faltantes antes de seleccionar marcador.
+
+Antes de guardar o enviar, el orquestador aplica guardrails de decision:
+
+- limita la confianza cuando la evidencia es baja o faltan categorias criticas
+- reduce marcadores comodos de favorito si no hay soporte de portero, estadistica reciente,
+  balon parado y conversion
+- cubre empate en el hedge cuando el riesgo de empate es alto
+- persiste perfil probabilistico y flags de decision en el historico local
 
 Subagentes actuales:
 

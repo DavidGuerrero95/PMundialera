@@ -86,6 +86,7 @@ class ResearchBrief:
     structured_evidence: list[EvidenceItem] = field(default_factory=list)
     uncertainty: list[str] = field(default_factory=list)
     calibration: PredictionCalibration | None = None
+    probability_profile: ProbabilityProfile | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,12 +126,44 @@ class PredictionCalibration:
 
 
 @dataclass(frozen=True, slots=True)
+class ProbabilityProfile:
+    home_win: float
+    draw: float
+    away_win: float
+    over_2_5: float
+    both_teams_to_score: float
+    expected_home_goals: float
+    expected_away_goals: float
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("home_win", self.home_win),
+            ("draw", self.draw),
+            ("away_win", self.away_win),
+            ("over_2_5", self.over_2_5),
+            ("both_teams_to_score", self.both_teams_to_score),
+        ):
+            if not 0.0 <= value <= 1.0:
+                msg = f"{name} must be between 0.0 and 1.0"
+                raise ValueError(msg)
+        if self.expected_home_goals < 0.0 or self.expected_away_goals < 0.0:
+            msg = "Expected goals must be greater than or equal to zero"
+            raise ValueError(msg)
+        total = self.home_win + self.draw + self.away_win
+        if abs(total - 1.0) > 0.02:
+            msg = "1X2 probabilities must sum to 1.0"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True, slots=True)
 class Prediction:
     match: Match
     primary: Scoreline
     hedge: Scoreline
     confidence: float
     rationale: list[str] = field(default_factory=list)
+    probabilities: ProbabilityProfile | None = None
+    decision_flags: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.confidence <= 1.0:
@@ -163,6 +196,8 @@ class PredictionRecord:
     submitted: bool
     dry_run: bool
     submission_message: str
+    probabilities: ProbabilityProfile | None = None
+    decision_flags: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

@@ -12,6 +12,7 @@ from mundialera.domain.models import (
     Prediction,
     PredictionOutcome,
     PredictionRecord,
+    ProbabilityProfile,
     Scoreline,
     SubmissionResult,
 )
@@ -52,6 +53,8 @@ class JsonlPredictionStore(PredictionRecorder, PredictionHistory):
             submitted=submission.submitted,
             dry_run=submission.dry_run,
             submission_message=submission.message,
+            probabilities=prediction.probabilities,
+            decision_flags=prediction.decision_flags,
         )
         self._append_json(self._predictions_path, _record_to_json(record))
 
@@ -121,6 +124,8 @@ def _record_from_json(payload: dict[str, object]) -> PredictionRecord:
         submitted=bool(payload["submitted"]),
         dry_run=bool(payload["dry_run"]),
         submission_message=str(payload["submission_message"]),
+        probabilities=_probabilities_from_json(payload.get("probabilities")),
+        decision_flags=[str(item) for item in _list(payload.get("decision_flags", []))],
     )
 
 
@@ -159,6 +164,23 @@ def _score_from_json(value: object) -> Scoreline:
         msg = "Invalid scoreline JSON"
         raise ValueError(msg)
     return Scoreline(home=int(value["home"]), away=int(value["away"]))
+
+
+def _probabilities_from_json(value: object) -> ProbabilityProfile | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        msg = "Invalid probability profile JSON"
+        raise ValueError(msg)
+    return ProbabilityProfile(
+        home_win=_float(value["home_win"]),
+        draw=_float(value["draw"]),
+        away_win=_float(value["away_win"]),
+        over_2_5=_float(value["over_2_5"]),
+        both_teams_to_score=_float(value["both_teams_to_score"]),
+        expected_home_goals=_float(value["expected_home_goals"]),
+        expected_away_goals=_float(value["expected_away_goals"]),
+    )
 
 
 def _float(value: object) -> float:

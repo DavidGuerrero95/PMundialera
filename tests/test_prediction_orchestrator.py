@@ -133,5 +133,5 @@ def test_run_group_window_uses_hedge_for_configured_group() -> None:
     corex = orchestrator.run_group_window("Mundial CoreX", dry_run=True)
     fifa = orchestrator.run_group_window("Mundial FIFA 2026", dry_run=True)
 
-    assert corex.submitted[0].scoreline == Scoreline(2, 0)
-    assert fifa.submitted[0].scoreline == Scoreline(1, 1)
+    assert corex.submitted[0].scoreline == corex.evaluated[0].primary
+    assert fifa.submitted[0].scoreline == fifa.evaluated[0].hedge

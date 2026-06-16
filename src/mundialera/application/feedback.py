@@ -68,6 +68,7 @@ def build_learning_memory(outcomes: list[PredictionOutcome]) -> str:
         "# PMundialera learning memory",
         "",
         "Use this as private feedback from previous GolPredictor predictions.",
+        "Do not overfit single matches; convert errors into conservative, reusable rules.",
         "",
         "## Scorecard",
         f"- Settled predictions: {total}",
@@ -77,9 +78,19 @@ def build_learning_memory(outcomes: list[PredictionOutcome]) -> str:
         f"- Away goals hit rate: {_pct(away_goals, total)}",
         f"- Goal-difference hit rate: {_pct(diff, total)}",
         f"- Average GolPredictor points: {avg_points:.2f}",
+        f"- Sample reliability: {_sample_reliability(total)}",
         "",
         "## Error tendencies",
         *[f"- {item}" for item in patterns],
+        "",
+        "## Calibration rules",
+        "- Treat this memory as a weak prior when settled sample is below 20 matches.",
+        "- Prefer probability calibration over memorizing specific teams or one-off results.",
+        (
+            "- Lower confidence when market/ranking favorite lacks lineup, goalkeeper, "
+            "recent-stat, or set-piece support."
+        ),
+        "- Raise draw/under review when favorite margin was repeatedly overestimated.",
         "",
         "## Recent settled matches",
         *[
@@ -139,6 +150,16 @@ def _average(values: list[int]) -> float:
 
 def _pct(count: int, total: int) -> str:
     return f"{(count / total) * 100:.1f}%"
+
+
+def _sample_reliability(total: int) -> str:
+    if total < 5:
+        return "very low; use only as directional guardrail"
+    if total < 20:
+        return "low; avoid strong conclusions"
+    if total < 60:
+        return "medium; monitor drift"
+    return "higher; still validate by current evidence"
 
 
 def _error_patterns(outcomes: list[PredictionOutcome]) -> list[str]:

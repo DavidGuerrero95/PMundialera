@@ -4,6 +4,12 @@ import hashlib
 from dataclasses import dataclass
 
 from mundialera.application.calibration import calibrate_research_brief
+from mundialera.application.probability import (
+    build_probability_profile,
+    draw_hedge_from_profile,
+    enrich_probability_profile,
+    scoreline_from_profile,
+)
 from mundialera.domain.models import EvidenceItem, Match, Prediction, ResearchBrief, Scoreline
 from mundialera.domain.ports import PredictionModel, ResearchAgent
 
@@ -21,12 +27,14 @@ class CompositeResearchAgent:
             evidence.extend(brief.evidence)
             structured_evidence.extend(brief.structured_evidence)
             uncertainty.extend(brief.uncertainty)
-        return calibrate_research_brief(
-            ResearchBrief(
-                match=match,
-                evidence=evidence,
-                structured_evidence=structured_evidence,
-                uncertainty=uncertainty,
+        return enrich_probability_profile(
+            calibrate_research_brief(
+                ResearchBrief(
+                    match=match,
+                    evidence=evidence,
+                    structured_evidence=structured_evidence,
+                    uncertainty=uncertainty,
+                )
             )
         )
 
@@ -53,6 +61,7 @@ class HeuristicPredictionModel(PredictionModel):
         match = brief.match
         seed = f"{match.home.name}|{match.away.name}".encode()
         digest = hashlib.sha256(seed).digest()
+        profile = brief.probability_profile or build_probability_profile(brief)
 
         home_strength = digest[0] % 4
         away_strength = digest[1] % 4
@@ -63,8 +72,10 @@ class HeuristicPredictionModel(PredictionModel):
             home = round((home + match.prediction.home) / 2)
             away = round((away + match.prediction.away) / 2)
 
-        primary = Scoreline(home=home, away=away)
-        hedge = self._hedge(primary)
+        baseline = Scoreline(home=home, away=away)
+        profile_score = scoreline_from_profile(profile)
+        primary = _blend_scoreline(baseline, profile_score)
+        hedge = draw_hedge_from_profile(profile, primary)
         uncertainty_penalty = min(0.25, len(brief.uncertainty) * 0.02)
         evidence_bonus = min(0.12, len(brief.evidence) * 0.005)
         calibration_penalty = 0.0
@@ -80,16 +91,20 @@ class HeuristicPredictionModel(PredictionModel):
                 and primary.home != primary.away
                 and abs(primary.home - primary.away) <= 1
             ):
-                hedge = Scoreline(
-                    home=min(primary.home, primary.away),
-                    away=min(primary.home, primary.away),
-                )
+                hedge = draw_hedge_from_profile(profile, primary)
         confidence = max(
             0.35,
             min(0.82, 0.62 + evidence_bonus - uncertainty_penalty - calibration_penalty),
         )
         rationale = [
             "Base heuristica deterministica calibrada por equipos y pronostico previo.",
+            (
+                "Perfil probabilistico: "
+                f"home={profile.home_win:.2f}, draw={profile.draw:.2f}, "
+                f"away={profile.away_win:.2f}, over2.5={profile.over_2_5:.2f}, "
+                f"btts={profile.both_teams_to_score:.2f}, "
+                f"xG={profile.expected_home_goals:.2f}-{profile.expected_away_goals:.2f}."
+            ),
             *brief.evidence[:10],
         ]
         if brief.calibration is not None:
@@ -108,6 +123,7 @@ class HeuristicPredictionModel(PredictionModel):
             hedge=hedge,
             confidence=round(confidence, 2),
             rationale=rationale,
+            probabilities=profile,
         )
 
     @staticmethod
@@ -117,6 +133,15 @@ class HeuristicPredictionModel(PredictionModel):
         if primary.home > primary.away:
             return Scoreline(home=primary.home, away=max(0, primary.away + 1))
         return Scoreline(home=max(0, primary.home + 1), away=primary.away)
+
+
+def _blend_scoreline(baseline: Scoreline, profile_score: Scoreline) -> Scoreline:
+    home = round((baseline.home + profile_score.home) / 2)
+    away = round((baseline.away + profile_score.away) / 2)
+    if baseline.home != baseline.away and profile_score.home == profile_score.away:
+        home = profile_score.home
+        away = profile_score.away
+    return Scoreline(home=home, away=away)
 
 
 def default_prompt_research_agents() -> list[ResearchAgent]:

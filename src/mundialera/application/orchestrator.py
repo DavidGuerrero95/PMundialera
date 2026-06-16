@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import timedelta
 
+from mundialera.application.decision_guardrails import apply_prediction_guardrails
 from mundialera.domain.models import Match, Prediction, SubmissionResult
 from mundialera.domain.ports import (
     Clock,
@@ -49,7 +50,7 @@ class PredictionOrchestrator:
         if cache_key in self._prediction_cache:
             return replace(self._prediction_cache[cache_key], match=match)
         brief = self._research_agent.research(match)
-        prediction = self._prediction_model.predict(brief)
+        prediction = apply_prediction_guardrails(self._prediction_model.predict(brief), brief)
         self._prediction_cache[cache_key] = prediction
         return prediction
 
