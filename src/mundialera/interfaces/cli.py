@@ -8,6 +8,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from mundialera.application.clock import SystemClock
+from mundialera.application.scheduler import plan_next_wake
 from mundialera.domain.models import Match, Prediction, Team
 from mundialera.interfaces.factory import (
     build_feedback_service,
@@ -256,6 +258,64 @@ def run_watch(
         if iterations is not None and cycle >= iterations:
             break
         time.sleep(interval_seconds)
+
+
+@run_app.command("schedule")
+def run_schedule(
+    idle_poll_seconds: Annotated[
+        int,
+        typer.Option(help="Maximum seconds to sleep when no match window is near"),
+    ] = 21600,
+    active_poll_seconds: Annotated[
+        int,
+        typer.Option(help="Seconds between cycles while inside or near a window"),
+    ] = 60,
+    pre_window_buffer_seconds: Annotated[
+        int,
+        typer.Option(help="Wake this many seconds before the submission window opens"),
+    ] = 300,
+) -> None:
+    settings = get_settings()
+    client = build_golpredictor_client(settings)
+    try:
+        matches = [
+            match
+            for group in settings.configured_groups()
+            for match in client.list_matches(group)
+        ]
+    finally:
+        client.close()
+    decision = plan_next_wake(
+        matches,
+        now=SystemClock(settings.pmundialera_timezone).now(),
+        submission_window_minutes=settings.pmundialera_submission_window_minutes,
+        idle_poll_seconds=idle_poll_seconds,
+        active_poll_seconds=active_poll_seconds,
+        pre_window_buffer_seconds=pre_window_buffer_seconds,
+    )
+    next_match = decision.next_match
+    console.print(
+        json.dumps(
+            {
+                "now": decision.now.isoformat(),
+                "in_window": decision.in_window,
+                "sleep_seconds": decision.sleep_seconds,
+                "reason": decision.reason,
+                "next_match": None
+                if next_match is None
+                else {
+                    "match_id": next_match.match_id,
+                    "match": next_match.label,
+                    "kickoff": next_match.kickoff.isoformat()
+                    if next_match.kickoff is not None
+                    else None,
+                    "group": next_match.group,
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def _prediction_to_dict(prediction: Prediction) -> dict[str, object]:

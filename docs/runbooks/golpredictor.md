@@ -27,6 +27,7 @@ porque el alias de la app puede no poder lanzarse desde subprocess.
 ```powershell
 pmundialera run once --dry-run
 pmundialera run watch --interval-seconds 60 --dry-run
+pmundialera run schedule
 ```
 
 ## Fully automatic Windows startup
@@ -55,7 +56,9 @@ The task runs `scripts/windows/run-autonomous.ps1`, which:
 - uses `.env` for credentials and Codex config
 - reuses the existing editable install when `mundialera` already imports
 - installs/refreshes the editable package only when missing, or when launched with `-RefreshInstall`
-- starts `pmundialera run watch --interval-seconds 60 --submit`
+- reads GolPredictor fixtures and computes the next wake-up before the configured
+  submission window instead of polling every minute while idle
+- runs `pmundialera run once --submit` only inside an active submission window
 - runs each autonomous cycle through a PowerShell watchdog so a hung Python call is
   killed after `-CycleTimeoutSeconds` and the next interval can continue
 - settles completed predictions and updates learning memory every cycle

@@ -145,6 +145,11 @@ enviadas contra resultados ya publicados, actualiza `.pmundialera/outcomes.jsonl
 y regenera `.pmundialera/learning-memory.md`. Esa memoria entra en el siguiente
 prompt de Codex.
 
+La automatizacion de Windows no consulta cada minuto cuando no hay ventana activa:
+primero lee los horarios de GolPredictor, calcula el proximo despertar antes de la
+ventana de 35 minutos y duerme hasta ese momento. Dentro de una ventana activa usa
+el intervalo corto configurado.
+
 Ver estado de aprendizaje:
 
 ```powershell

@@ -10,7 +10,11 @@ param(
 
     [switch] $RefreshInstall,
 
-    [int] $CycleTimeoutSeconds = 1500
+    [int] $CycleTimeoutSeconds = 1500,
+
+    [int] $IdlePollSeconds = 21600,
+
+    [int] $PreWindowBufferSeconds = 300
 )
 
 $ErrorActionPreference = "Stop"
@@ -97,20 +101,50 @@ try {
         $cycle = 0
         while ($Iterations -eq 0 -or $cycle -lt $Iterations) {
             $cycle += 1
+            $schedule = $null
             Write-Output ("[{0}] PMundialera cycle {1} starting." -f (Get-Date -Format "s"), $cycle)
             try {
-                if ($Mode -eq "submit") {
+                $scheduleOutput = Invoke-PMundialeraPython `
+                    -Arguments @(
+                        "-m", "mundialera.interfaces.cli", "run", "schedule",
+                        "--idle-poll-seconds", $IdlePollSeconds,
+                        "--active-poll-seconds", $IntervalSeconds,
+                        "--pre-window-buffer-seconds", $PreWindowBufferSeconds
+                    ) `
+                    -TimeoutSeconds $CycleTimeoutSeconds
+                $schedule = $scheduleOutput | ConvertFrom-Json
+                $nextMatch = "none"
+                if ($null -ne $schedule.next_match) {
+                    $nextMatch = "{0} at {1}" -f $schedule.next_match.match, $schedule.next_match.kickoff
+                }
+                Write-Output (
+                    "[{0}] Schedule: in_window={1}, sleep_seconds={2}, reason={3}, next={4}" -f `
+                    (Get-Date -Format "s"),
+                    $schedule.in_window,
+                    $schedule.sleep_seconds,
+                    $schedule.reason,
+                    $nextMatch
+                )
+
+                if ($schedule.in_window) {
+                    if ($Mode -eq "submit") {
+                        Invoke-PMundialeraPython `
+                            -Arguments @("-m", "mundialera.interfaces.cli", "run", "once", "--submit") `
+                            -TimeoutSeconds $CycleTimeoutSeconds
+                    } else {
+                        Invoke-PMundialeraPython `
+                            -Arguments @("-m", "mundialera.interfaces.cli", "run", "once", "--dry-run") `
+                            -TimeoutSeconds $CycleTimeoutSeconds
+                    }
                     Invoke-PMundialeraPython `
-                        -Arguments @("-m", "mundialera.interfaces.cli", "run", "once", "--submit") `
+                        -Arguments @("-m", "mundialera.interfaces.cli", "feedback", "settle") `
                         -TimeoutSeconds $CycleTimeoutSeconds
                 } else {
-                    Invoke-PMundialeraPython `
-                        -Arguments @("-m", "mundialera.interfaces.cli", "run", "once", "--dry-run") `
-                        -TimeoutSeconds $CycleTimeoutSeconds
+                    Write-Output (
+                        "[{0}] No active submission window; skipping prediction cycle." -f `
+                        (Get-Date -Format "s")
+                    )
                 }
-                Invoke-PMundialeraPython `
-                    -Arguments @("-m", "mundialera.interfaces.cli", "feedback", "settle") `
-                    -TimeoutSeconds $CycleTimeoutSeconds
             } catch {
                 Write-Output ("[{0}] PMundialera cycle {1} failed: {2}" -f (Get-Date -Format "s"), $cycle, $_.Exception.Message)
             }
@@ -118,7 +152,12 @@ try {
             if ($Iterations -gt 0 -and $cycle -ge $Iterations) {
                 break
             }
-            Start-Sleep -Seconds $IntervalSeconds
+            $sleepSeconds = $IntervalSeconds
+            if ($null -ne $schedule -and $null -ne $schedule.sleep_seconds) {
+                $sleepSeconds = [int] $schedule.sleep_seconds
+            }
+            Write-Output ("[{0}] Sleeping {1} seconds." -f (Get-Date -Format "s"), $sleepSeconds)
+            Start-Sleep -Seconds $sleepSeconds
         }
     } finally {
         Stop-Transcript | Out-Null
