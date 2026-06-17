@@ -22,6 +22,99 @@ UNDER_TERMS = (
 )
 HOME_FAVORITE_TERMS = ("home favorite", "local favorito", "favorito local")
 AWAY_FAVORITE_TERMS = ("away favorite", "visitante favorito", "favorito visitante")
+TEAM_STRENGTH_PRIORS = {
+    "argentina": 0.92,
+    "francia": 0.90,
+    "france": 0.90,
+    "inglaterra": 0.88,
+    "england": 0.88,
+    "portugal": 0.87,
+    "espana": 0.86,
+    "españa": 0.86,
+    "brazil": 0.85,
+    "brasil": 0.85,
+    "alemania": 0.82,
+    "germany": 0.82,
+    "paises bajos": 0.80,
+    "países bajos": 0.80,
+    "netherlands": 0.80,
+    "belgica": 0.78,
+    "bélgica": 0.78,
+    "uruguay": 0.76,
+    "croacia": 0.76,
+    "croatia": 0.76,
+    "colombia": 0.73,
+    "suiza": 0.70,
+    "switzerland": 0.70,
+    "noruega": 0.68,
+    "norway": 0.68,
+    "senegal": 0.66,
+    "austria": 0.65,
+    "marruecos": 0.64,
+    "morocco": 0.64,
+    "estados unidos": 0.63,
+    "united states": 0.63,
+    "mexico": 0.62,
+    "méxico": 0.62,
+    "japon": 0.62,
+    "japón": 0.62,
+    "ecuador": 0.60,
+    "suecia": 0.60,
+    "sweden": 0.60,
+    "costa de marfil": 0.58,
+    "ivory coast": 0.58,
+    "turquia": 0.57,
+    "turquía": 0.57,
+    "turkey": 0.57,
+    "ghana": 0.55,
+    "paraguay": 0.55,
+    "escocia": 0.54,
+    "scotland": 0.54,
+    "tunez": 0.53,
+    "túnez": 0.53,
+    "tunisia": 0.53,
+    "argelia": 0.52,
+    "algeria": 0.52,
+    "egipto": 0.52,
+    "egypt": 0.52,
+    "iran": 0.51,
+    "irán": 0.51,
+    "corea del sur": 0.50,
+    "south korea": 0.50,
+    "republica checa": 0.50,
+    "república checa": 0.50,
+    "czech republic": 0.50,
+    "canada": 0.49,
+    "canadá": 0.49,
+    "australia": 0.48,
+    "bosnia-herzegovina": 0.47,
+    "bosnia": 0.47,
+    "sudafrica": 0.46,
+    "sudáfrica": 0.46,
+    "south africa": 0.46,
+    "arabia saudita": 0.45,
+    "saudi arabia": 0.45,
+    "catar": 0.44,
+    "qatar": 0.44,
+    "nueva zelanda": 0.43,
+    "new zealand": 0.43,
+    "panama": 0.42,
+    "panamá": 0.42,
+    "rd congo": 0.42,
+    "dr congo": 0.42,
+    "irak": 0.40,
+    "iraq": 0.40,
+    "uzbekistan": 0.40,
+    "uzbekistán": 0.40,
+    "cabo verde": 0.38,
+    "cape verde": 0.38,
+    "jordania": 0.35,
+    "jordan": 0.35,
+    "haiti": 0.34,
+    "haití": 0.34,
+    "curazao": 0.30,
+    "curacao": 0.30,
+}
 
 
 def enrich_probability_profile(brief: ResearchBrief) -> ResearchBrief:
@@ -35,15 +128,15 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
     quality = brief.calibration.evidence_quality if brief.calibration else 0.0
     draw_risk = brief.calibration.draw_risk if brief.calibration else 0.25
     favorite_bias = brief.calibration.favorite_bias_risk if brief.calibration else 0.0
-    diff = _base_team_diff(brief)
+    diff = _class_gap_diff(brief) + (_base_team_diff(brief) * 0.20)
 
     if any(term in corpus for term in HOME_FAVORITE_TERMS):
         diff += 0.22
     if any(term in corpus for term in AWAY_FAVORITE_TERMS):
         diff -= 0.22
-    diff *= 1.0 - (favorite_bias * 0.28)
+    diff *= 1.0 - (favorite_bias * 0.16)
 
-    draw = _clamp(0.24 + draw_risk * 0.30 - quality * 0.04 - abs(diff) * 0.08, 0.18, 0.42)
+    draw = _clamp(0.22 + draw_risk * 0.15 - quality * 0.04 - abs(diff) * 0.18, 0.17, 0.34)
     directional_mass = 1.0 - draw
     home_share = _clamp(0.5 + diff, 0.18, 0.82)
     home_win = directional_mass * home_share
@@ -52,11 +145,16 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
     over_hits = _term_hits(corpus, OVER_TERMS)
     under_hits = _term_hits(corpus, UNDER_TERMS)
     total_goals = _clamp(
-        2.28 + over_hits * 0.14 - under_hits * 0.16 - draw_risk * 0.25 + quality * 0.10,
+        2.48
+        + over_hits * 0.12
+        - under_hits * 0.08
+        - draw_risk * 0.10
+        + quality * 0.10
+        + abs(diff) * 0.45,
         1.45,
-        3.35,
+        3.65,
     )
-    expected_home = _clamp(total_goals / 2 + diff * 0.85, 0.25, 3.5)
+    expected_home = _clamp(total_goals / 2 + diff * 1.35, 0.25, 3.5)
     expected_away = _clamp(total_goals - expected_home, 0.25, 3.5)
     over_25 = _clamp(
         0.42 + (total_goals - 2.35) * 0.16 + over_hits * 0.05 - under_hits * 0.06,
@@ -81,7 +179,7 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
 
 
 def scoreline_from_profile(profile: ProbabilityProfile) -> Scoreline:
-    if profile.draw >= max(profile.home_win, profile.away_win) - 0.04:
+    if profile.draw >= max(profile.home_win, profile.away_win) + 0.03:
         goals = 1 if profile.expected_home_goals + profile.expected_away_goals >= 1.55 else 0
         return Scoreline(goals, goals)
 
@@ -96,6 +194,10 @@ def scoreline_from_profile(profile: ProbabilityProfile) -> Scoreline:
             home = away + 2
         else:
             away = home + 2
+    if profile.home_win >= 0.48 and home - away < 1:
+        home = away + 1
+    if profile.away_win >= 0.48 and away - home < 1:
+        away = home + 1
     return Scoreline(home, away)
 
 
@@ -113,6 +215,12 @@ def _base_team_diff(brief: ResearchBrief) -> float:
     seed = f"{brief.match.home.name}|{brief.match.away.name}".encode()
     digest = hashlib.sha256(seed).digest()
     return ((digest[0] / 255) - (digest[1] / 255)) * 0.22
+
+
+def _class_gap_diff(brief: ResearchBrief) -> float:
+    home = TEAM_STRENGTH_PRIORS.get(brief.match.home.name.casefold(), 0.50)
+    away = TEAM_STRENGTH_PRIORS.get(brief.match.away.name.casefold(), 0.50)
+    return (home - away) * 0.55
 
 
 def _goal_count(expected_goals: float) -> int:

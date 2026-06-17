@@ -25,7 +25,7 @@ def apply_prediction_guardrails(prediction: Prediction, brief: ResearchBrief) ->
         if _unsupported_comfortable_favorite(prediction.primary, brief):
             primary = _reduce_margin(prediction.primary)
             flags.append("comfortable-favorite-reduced-by-evidence-guardrail")
-        if profile is not None and _draw_needs_cover(brief):
+        if profile is not None and _draw_needs_cover(brief, prediction):
             hedge = draw_hedge_from_profile(profile, primary)
             flags.append("draw-risk-covered-in-hedge")
 
@@ -78,5 +78,13 @@ def _reduce_margin(scoreline: Scoreline) -> Scoreline:
     return Scoreline(home=scoreline.home, away=max(scoreline.home + 1, scoreline.away - 1))
 
 
-def _draw_needs_cover(brief: ResearchBrief) -> bool:
-    return brief.calibration is not None and brief.calibration.draw_risk >= 0.42
+def _draw_needs_cover(brief: ResearchBrief, prediction: Prediction) -> bool:
+    profile = prediction.probabilities or brief.probability_profile
+    if brief.calibration is None or profile is None:
+        return False
+    favorite_probability = max(profile.home_win, profile.away_win)
+    return (
+        brief.calibration.draw_risk >= 0.55
+        and profile.draw >= 0.29
+        and favorite_probability - profile.draw <= 0.12
+    )

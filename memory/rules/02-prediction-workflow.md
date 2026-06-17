@@ -38,6 +38,11 @@ Prediction selection must be probability-first. Estimate home/draw/away,
 over/under, both-teams-to-score, and expected goals before deriving the exact
 scoreline. Use learning memory as a weak prior, especially with small samples;
 do not memorize one-off team results or overfit a single settled match.
+General uncertainty is not draw evidence. Draw must be supported by concrete
+signals such as market draw price, under profile, low block, goalkeeper edge,
+low conversion, fatigue, or matchup constraints. When class gap, market, form,
+and attacking ceiling align, prefer a favorite win by one or two goals even when
+secondary evidence categories are incomplete.
 
 Before submission, apply decision guardrails that cap confidence for weak
 evidence, reduce unsupported comfortable favorite margins, and add a draw hedge

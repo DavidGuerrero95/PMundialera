@@ -90,7 +90,8 @@ def build_learning_memory(outcomes: list[PredictionOutcome]) -> str:
             "- Lower confidence when market/ranking favorite lacks lineup, goalkeeper, "
             "recent-stat, or set-piece support."
         ),
-        "- Raise draw/under review when favorite margin was repeatedly overestimated.",
+        "- Do not use draw as the default response to uncertainty; require concrete draw evidence.",
+        "- Restore favorite wins when class gap, market, form, and attacking ceiling align.",
         "",
         "## Recent settled matches",
         *[
@@ -175,6 +176,10 @@ def _error_patterns(outcomes: list[PredictionOutcome]) -> list[str]:
             counter["The model underestimated away-team goals."] += 1
         if not item.winner_ok:
             counter["The model missed winner/draw classification."] += 1
+        if _winner(item.predicted) == "draw" and _winner(item.actual) != "draw":
+            counter["The model overpredicted draws; do not default uncertainty to 1-1."] += 1
+            if _margin(item.actual) >= 2:
+                counter["Draw guardrail was too aggressive against a clear winner."] += 1
         if _winner(item.actual) == "draw" and _winner(item.predicted) != "draw":
             counter[
                 "The model missed a draw; raise draw-risk calibration for similar matches."

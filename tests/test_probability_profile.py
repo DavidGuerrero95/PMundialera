@@ -57,3 +57,47 @@ def test_probability_profile_keeps_1x2_probabilities_normalized() -> None:
     assert abs(profile.home_win + profile.draw + profile.away_win - 1.0) <= 0.02
     assert profile.expected_home_goals >= 0
     assert profile.expected_away_goals >= 0
+
+
+def test_probability_profile_uses_class_gap_before_defaulting_to_draw() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("Argentina"), away=Team("Argelia"))
+    brief = calibrate_research_brief(
+        ResearchBrief(
+            match=match,
+            structured_evidence=[
+                _evidence(
+                    EvidenceCategory.RANKING,
+                    "Argentina favorite by ranking and squad quality.",
+                ),
+                _evidence(
+                    EvidenceCategory.FORM,
+                    "Argentina attacking ceiling is higher and can win by multiple goals.",
+                ),
+            ],
+        )
+    )
+
+    profile = build_probability_profile(brief)
+    scoreline = scoreline_from_profile(profile)
+
+    assert profile.home_win > profile.draw
+    assert scoreline.home > scoreline.away
+
+
+def test_probability_profile_supports_stronger_away_favorite() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("Irak"), away=Team("Noruega"))
+    brief = calibrate_research_brief(
+        ResearchBrief(
+            match=match,
+            structured_evidence=[
+                _evidence(EvidenceCategory.RANKING, "Noruega favorite by ranking."),
+                _evidence(EvidenceCategory.FORM, "Noruega has high attacking ceiling."),
+            ],
+        )
+    )
+
+    profile = build_probability_profile(brief)
+    scoreline = scoreline_from_profile(profile)
+
+    assert profile.away_win > profile.draw
+    assert scoreline.away > scoreline.home
