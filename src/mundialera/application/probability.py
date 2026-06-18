@@ -203,7 +203,11 @@ def scoreline_from_profile(profile: ProbabilityProfile) -> Scoreline:
 
 def draw_hedge_from_profile(profile: ProbabilityProfile, primary: Scoreline) -> Scoreline:
     total_goals = profile.expected_home_goals + profile.expected_away_goals
-    draw_goals = 1 if total_goals >= 1.65 else 0
+    draw_goals = 0
+    if profile.over_2_5 >= 0.58 and profile.both_teams_to_score >= 0.60:
+        draw_goals = 2
+    elif total_goals >= 1.65:
+        draw_goals = 1
     if primary.home == primary.away:
         if profile.home_win >= profile.away_win:
             return Scoreline(primary.home + 1, primary.away)
@@ -211,10 +215,59 @@ def draw_hedge_from_profile(profile: ProbabilityProfile, primary: Scoreline) -> 
     return Scoreline(draw_goals, draw_goals)
 
 
+def portfolio_hedge_from_profile(profile: ProbabilityProfile, primary: Scoreline) -> Scoreline:
+    if primary.home == primary.away:
+        return _favorite_breaks_draw(profile, primary)
+
+    favorite_probability = max(profile.home_win, profile.away_win)
+    total_goals = profile.expected_home_goals + profile.expected_away_goals
+    high_btts_draw_cover = (
+        favorite_probability >= 0.46
+        and profile.draw >= 0.29
+        and profile.both_teams_to_score >= 0.60
+        and profile.over_2_5 >= 0.58
+    )
+    if high_btts_draw_cover:
+        goals = 2 if total_goals >= 2.75 else 1
+        return Scoreline(goals, goals)
+
+    if profile.over_2_5 >= 0.55 and profile.both_teams_to_score >= 0.52:
+        return _expand_winning_margin(primary)
+
+    if profile.over_2_5 <= 0.45 or profile.both_teams_to_score <= 0.45:
+        return _lower_total_same_winner(primary)
+
+    return _nudge_winner_same_margin(primary)
+
+
 def _base_team_diff(brief: ResearchBrief) -> float:
     seed = f"{brief.match.home.name}|{brief.match.away.name}".encode()
     digest = hashlib.sha256(seed).digest()
     return ((digest[0] / 255) - (digest[1] / 255)) * 0.22
+
+
+def _favorite_breaks_draw(profile: ProbabilityProfile, primary: Scoreline) -> Scoreline:
+    if profile.home_win >= profile.away_win:
+        return Scoreline(primary.home + 1, primary.away)
+    return Scoreline(primary.home, primary.away + 1)
+
+
+def _expand_winning_margin(primary: Scoreline) -> Scoreline:
+    if primary.home > primary.away:
+        return Scoreline(home=min(5, primary.home + 1), away=primary.away)
+    return Scoreline(home=primary.home, away=min(5, primary.away + 1))
+
+
+def _lower_total_same_winner(primary: Scoreline) -> Scoreline:
+    if primary.home > primary.away:
+        return Scoreline(home=max(1, primary.home - 1), away=0)
+    return Scoreline(home=0, away=max(1, primary.away - 1))
+
+
+def _nudge_winner_same_margin(primary: Scoreline) -> Scoreline:
+    if primary.home > primary.away:
+        return Scoreline(home=primary.home, away=max(0, primary.away - 1))
+    return Scoreline(home=max(0, primary.home - 1), away=primary.away)
 
 
 def _class_gap_diff(brief: ResearchBrief) -> float:

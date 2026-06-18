@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from mundialera.application.probability import draw_hedge_from_profile
+from mundialera.application.probability import draw_hedge_from_profile, portfolio_hedge_from_profile
 from mundialera.domain.models import Prediction, ResearchBrief, Scoreline
 
 
@@ -28,6 +28,9 @@ def apply_prediction_guardrails(prediction: Prediction, brief: ResearchBrief) ->
         if profile is not None and _draw_needs_cover(brief, prediction):
             hedge = draw_hedge_from_profile(profile, primary)
             flags.append("draw-risk-covered-in-hedge")
+        elif profile is not None and _hedge_overuses_draw(primary, hedge, brief):
+            hedge = portfolio_hedge_from_profile(profile, primary)
+            flags.append("hedge-rebalanced-away-from-default-draw")
 
     if flags:
         rationale.append("Decision guardrails: " + "; ".join(dict.fromkeys(flags)))
@@ -83,8 +86,20 @@ def _draw_needs_cover(brief: ResearchBrief, prediction: Prediction) -> bool:
     if brief.calibration is None or profile is None:
         return False
     favorite_probability = max(profile.home_win, profile.away_win)
+    low_total_or_draw_led = profile.over_2_5 <= 0.54 or profile.draw >= favorite_probability
     return (
         brief.calibration.draw_risk >= 0.55
         and profile.draw >= 0.29
         and favorite_probability - profile.draw <= 0.12
+        and low_total_or_draw_led
     )
+
+
+def _hedge_overuses_draw(primary: Scoreline, hedge: Scoreline, brief: ResearchBrief) -> bool:
+    profile = brief.probability_profile
+    if profile is None:
+        return False
+    if primary.home == primary.away or hedge.home != hedge.away:
+        return False
+    favorite_probability = max(profile.home_win, profile.away_win)
+    return favorite_probability - profile.draw > 0.08 or profile.over_2_5 >= 0.55

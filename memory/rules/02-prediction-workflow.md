@@ -47,6 +47,11 @@ secondary evidence categories are incomplete.
 Before submission, apply decision guardrails that cap confidence for weak
 evidence, reduce unsupported comfortable favorite margins, and add a draw hedge
 when draw risk is high.
+The hedge is a portfolio pick, not an automatic draw. Preserve the same winner
+with a different total or margin when favorite edge, over profile, and
+both-teams-to-score are aligned. Use draw hedge only when draw probability is
+near the favorite or when a high BTTS/over profile specifically supports a
+high-scoring draw.
 
 ## Final engine
 

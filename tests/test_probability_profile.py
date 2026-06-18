@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from mundialera.application.calibration import calibrate_research_brief
-from mundialera.application.probability import build_probability_profile, scoreline_from_profile
+from mundialera.application.probability import (
+    build_probability_profile,
+    draw_hedge_from_profile,
+    portfolio_hedge_from_profile,
+    scoreline_from_profile,
+)
 from mundialera.domain.models import (
     EvidenceCategory,
     EvidenceItem,
     Match,
+    ProbabilityProfile,
     ResearchBrief,
+    Scoreline,
     SourceTier,
     Team,
 )
@@ -101,3 +108,51 @@ def test_probability_profile_supports_stronger_away_favorite() -> None:
 
     assert profile.away_win > profile.draw
     assert scoreline.away > scoreline.home
+
+
+def test_portfolio_hedge_preserves_winner_when_over_profile_is_not_draw_led() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.38,
+        draw=0.33,
+        away_win=0.29,
+        over_2_5=0.57,
+        both_teams_to_score=0.57,
+        expected_home_goals=1.46,
+        expected_away_goals=1.28,
+    )
+
+    hedge = portfolio_hedge_from_profile(profile, Scoreline(2, 1))
+
+    assert hedge == Scoreline(3, 1)
+
+
+def test_portfolio_hedge_uses_high_scoring_draw_for_strong_btts_favorite_risk() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.48,
+        draw=0.30,
+        away_win=0.22,
+        over_2_5=0.72,
+        both_teams_to_score=0.63,
+        expected_home_goals=1.77,
+        expected_away_goals=1.27,
+    )
+
+    hedge = portfolio_hedge_from_profile(profile, Scoreline(2, 1))
+
+    assert hedge == Scoreline(2, 2)
+
+
+def test_draw_hedge_uses_two_two_when_draw_and_over_are_both_live() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.34,
+        draw=0.34,
+        away_win=0.32,
+        over_2_5=0.71,
+        both_teams_to_score=0.66,
+        expected_home_goals=1.49,
+        expected_away_goals=1.46,
+    )
+
+    hedge = draw_hedge_from_profile(profile, Scoreline(2, 1))
+
+    assert hedge == Scoreline(2, 2)

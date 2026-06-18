@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from mundialera.application.calibration import calibrate_research_brief
 from mundialera.application.probability import (
     build_probability_profile,
-    draw_hedge_from_profile,
     enrich_probability_profile,
+    portfolio_hedge_from_profile,
     scoreline_from_profile,
 )
 from mundialera.domain.models import EvidenceItem, Match, Prediction, ResearchBrief, Scoreline
@@ -75,7 +75,7 @@ class HeuristicPredictionModel(PredictionModel):
         baseline = Scoreline(home=home, away=away)
         profile_score = scoreline_from_profile(profile)
         primary = _blend_scoreline(baseline, profile_score)
-        hedge = draw_hedge_from_profile(profile, primary)
+        hedge = portfolio_hedge_from_profile(profile, primary)
         uncertainty_penalty = min(0.25, len(brief.uncertainty) * 0.02)
         evidence_bonus = min(0.12, len(brief.evidence) * 0.005)
         calibration_penalty = 0.0
@@ -91,7 +91,7 @@ class HeuristicPredictionModel(PredictionModel):
                 and primary.home != primary.away
                 and abs(primary.home - primary.away) <= 1
             ):
-                hedge = draw_hedge_from_profile(profile, primary)
+                hedge = portfolio_hedge_from_profile(profile, primary)
         confidence = max(
             0.35,
             min(0.82, 0.62 + evidence_bonus - uncertainty_penalty - calibration_penalty),

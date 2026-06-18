@@ -8,6 +8,8 @@ from mundialera.domain.models import (
     EvidenceItem,
     Match,
     Prediction,
+    PredictionCalibration,
+    ProbabilityProfile,
     ResearchBrief,
     Scoreline,
     SourceTier,
@@ -83,3 +85,36 @@ def test_guardrails_add_draw_hedge_when_draw_risk_is_high() -> None:
 
     assert guarded.hedge.home == guarded.hedge.away
     assert "draw-risk-covered-in-hedge" in guarded.decision_flags
+
+
+def test_guardrails_replace_default_draw_hedge_when_over_profile_favors_winner() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("Inglaterra"), away=Team("Croacia"))
+    brief = ResearchBrief(
+        match=match,
+        calibration=PredictionCalibration(
+            evidence_quality=0.50,
+            draw_risk=0.90,
+            favorite_bias_risk=0.80,
+        ),
+        probability_profile=ProbabilityProfile(
+            home_win=0.38,
+            draw=0.33,
+            away_win=0.29,
+            over_2_5=0.57,
+            both_teams_to_score=0.57,
+            expected_home_goals=1.46,
+            expected_away_goals=1.28,
+        ),
+    )
+    prediction = Prediction(
+        match=match,
+        primary=Scoreline(2, 1),
+        hedge=Scoreline(1, 1),
+        confidence=0.48,
+        rationale=["codex hedge"],
+    )
+
+    guarded = apply_prediction_guardrails(prediction, brief)
+
+    assert guarded.hedge == Scoreline(3, 1)
+    assert "hedge-rebalanced-away-from-default-draw" in guarded.decision_flags
