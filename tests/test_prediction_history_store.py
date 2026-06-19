@@ -13,6 +13,7 @@ from mundialera.domain.models import (
     Team,
 )
 from mundialera.infrastructure.local_store.history import SqlitePredictionStore
+from mundialera.interfaces.factory import _combined_prediction_memory
 
 
 def test_prediction_store_persists_probability_profile_and_decision_flags(tmp_path: Path) -> None:
@@ -61,7 +62,6 @@ def test_prediction_store_persists_tournament_state_memory(tmp_path: Path) -> No
     store.write_tournament_state_memory("# state\n- Canada: P1 W1")
 
     assert store.load_tournament_state_memory() == "# state\n- Canada: P1 W1"
-    assert store.tournament_state_path == store.database_path
 
 
 def test_prediction_store_persists_outcomes_idempotently(tmp_path: Path) -> None:
@@ -88,7 +88,7 @@ def test_prediction_store_persists_outcomes_idempotently(tmp_path: Path) -> None
     assert store.load_outcomes() == [outcome]
 
 
-def test_prediction_store_migrates_legacy_files_to_sqlite(tmp_path: Path) -> None:
+def test_prediction_store_ignores_legacy_files(tmp_path: Path) -> None:
     (tmp_path / "predictions.jsonl").write_text(
         (
             '{"record_id":"legacy-1","created_at":"2026-06-18T10:00:00-05:00",'
@@ -118,18 +118,21 @@ def test_prediction_store_migrates_legacy_files_to_sqlite(tmp_path: Path) -> Non
 
     store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
 
-    loaded_record = store.load_prediction_records()[0]
-    assert loaded_record.record_id == "legacy-1"
-    assert loaded_record.probabilities == ProbabilityProfile(
-        home_win=0.5,
-        draw=0.25,
-        away_win=0.25,
-        over_2_5=0.45,
-        both_teams_to_score=0.5,
-        expected_home_goals=1.5,
-        expected_away_goals=1.0,
-    )
-    assert loaded_record.decision_flags == ["legacy-flag"]
-    assert store.load_outcomes()[0].record_id == "legacy-1"
-    assert store.load_learning_memory() == "# learning\n- keep calibration"
-    assert store.load_tournament_state_memory() == "# state\n- A: P1 W1"
+    assert store.load_prediction_records() == []
+    assert store.load_outcomes() == []
+    assert store.load_learning_memory() == ""
+    assert store.load_tournament_state_memory() == ""
+
+
+def test_prediction_prompt_memory_uses_sqlite_only(tmp_path: Path) -> None:
+    (tmp_path / "learning-memory.md").write_text("# legacy learning", encoding="utf-8")
+    (tmp_path / "tournament-state.md").write_text("# legacy state", encoding="utf-8")
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
+    store.write_learning_memory("# sqlite learning")
+    store.write_tournament_state_memory("# sqlite state")
+
+    memory = _combined_prediction_memory(store)
+
+    assert "# sqlite learning" in memory
+    assert "# sqlite state" in memory
+    assert "legacy" not in memory

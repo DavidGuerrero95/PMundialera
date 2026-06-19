@@ -5,7 +5,6 @@ import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import cast
 from zoneinfo import ZoneInfo
 
 from mundialera.domain.models import (
@@ -26,23 +25,11 @@ class SqlitePredictionStore(PredictionRecorder, PredictionHistory):
         self._base_dir = base_dir
         self._timezone = ZoneInfo(timezone_name)
         self._database_path = base_dir / "pmundialera.sqlite3"
-        self._legacy_predictions_path = base_dir / "predictions.jsonl"
-        self._legacy_outcomes_path = base_dir / "outcomes.jsonl"
-        self._legacy_learning_path = base_dir / "learning-memory.md"
-        self._legacy_tournament_state_path = base_dir / "tournament-state.md"
         self._base_dir.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
     @property
     def database_path(self) -> Path:
-        return self._database_path
-
-    @property
-    def learning_path(self) -> Path:
-        return self._database_path
-
-    @property
-    def tournament_state_path(self) -> Path:
         return self._database_path
 
     def record_prediction(
@@ -124,7 +111,6 @@ class SqlitePredictionStore(PredictionRecorder, PredictionHistory):
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute("PRAGMA foreign_keys=ON")
             self._create_schema(connection)
-            self._migrate_legacy_files(connection)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._database_path)
@@ -192,40 +178,6 @@ class SqlitePredictionStore(PredictionRecorder, PredictionHistory):
             """
         )
         self._write_metadata("schema_version", str(SCHEMA_VERSION), connection=connection)
-
-    def _migrate_legacy_files(self, connection: sqlite3.Connection) -> None:
-        if self._count_rows(connection, "predictions") == 0:
-            for payload in _read_jsonl(self._legacy_predictions_path):
-                self._insert_prediction(connection, _record_from_json(payload))
-        if self._count_rows(connection, "outcomes") == 0:
-            for payload in _read_jsonl(self._legacy_outcomes_path):
-                self._insert_outcome(connection, _outcome_from_json(payload))
-        if not self._load_metadata("learning_memory", connection=connection):
-            self._migrate_markdown_metadata(
-                connection,
-                key="learning_memory",
-                path=self._legacy_learning_path,
-            )
-        if not self._load_metadata("tournament_state", connection=connection):
-            self._migrate_markdown_metadata(
-                connection,
-                key="tournament_state",
-                path=self._legacy_tournament_state_path,
-            )
-
-    def _migrate_markdown_metadata(
-        self,
-        connection: sqlite3.Connection,
-        *,
-        key: str,
-        path: Path,
-    ) -> None:
-        if path.exists():
-            self._write_metadata(
-                key,
-                path.read_text(encoding="utf-8").strip(),
-                connection=connection,
-            )
 
     def _insert_prediction(
         self,
@@ -338,18 +290,6 @@ class SqlitePredictionStore(PredictionRecorder, PredictionHistory):
             if own_connection:
                 active_connection.close()
 
-    @staticmethod
-    def _count_rows(connection: sqlite3.Connection, table_name: str) -> int:
-        statements = {
-            "predictions": "SELECT COUNT(*) AS count FROM predictions",
-            "outcomes": "SELECT COUNT(*) AS count FROM outcomes",
-        }
-        row = connection.execute(statements[table_name]).fetchone()
-        return int(row["count"])
-
-
-JsonlPredictionStore = SqlitePredictionStore
-
 
 def _record_from_row(row: sqlite3.Row) -> PredictionRecord:
     return PredictionRecord(
@@ -391,68 +331,6 @@ def _outcome_from_row(row: sqlite3.Row) -> PredictionOutcome:
         away_goals_ok=bool(row["away_goals_ok"]),
         goal_diff_ok=bool(row["goal_diff_ok"]),
     )
-
-
-def _record_from_json(payload: dict[str, object]) -> PredictionRecord:
-    submitted_scoreline = payload.get("submitted_scoreline", payload["primary"])
-    return PredictionRecord(
-        record_id=str(payload["record_id"]),
-        created_at=datetime.fromisoformat(str(payload["created_at"])),
-        group=str(payload["group"]),
-        match_id=str(payload["match_id"]),
-        match_label=str(payload["match_label"]),
-        kickoff=_optional_datetime(payload.get("kickoff")),
-        primary=_score_from_json(payload["primary"]),
-        hedge=_score_from_json(payload["hedge"]),
-        submitted_scoreline=_score_from_json(submitted_scoreline),
-        confidence=_float(payload["confidence"]),
-        rationale=[str(item) for item in _list(payload.get("rationale", []))],
-        submitted=bool(payload["submitted"]),
-        dry_run=bool(payload["dry_run"]),
-        submission_message=str(payload["submission_message"]),
-        probabilities=_probabilities_from_json(payload.get("probabilities")),
-        decision_flags=[str(item) for item in _list(payload.get("decision_flags", []))],
-    )
-
-
-def _outcome_from_json(payload: dict[str, object]) -> PredictionOutcome:
-    return PredictionOutcome(
-        record_id=str(payload["record_id"]),
-        settled_at=datetime.fromisoformat(str(payload["settled_at"])),
-        group=str(payload["group"]),
-        match_id=str(payload["match_id"]),
-        match_label=str(payload["match_label"]),
-        predicted=_score_from_json(payload["predicted"]),
-        actual=_score_from_json(payload["actual"]),
-        points=_optional_int(payload.get("points")),
-        exact_ok=bool(payload["exact_ok"]),
-        winner_ok=bool(payload["winner_ok"]),
-        home_goals_ok=bool(payload["home_goals_ok"]),
-        away_goals_ok=bool(payload["away_goals_ok"]),
-        goal_diff_ok=bool(payload["goal_diff_ok"]),
-    )
-
-
-def _read_jsonl(path: Path) -> list[dict[str, object]]:
-    if not path.exists():
-        return []
-    items: list[dict[str, object]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            parsed = json.loads(stripped)
-            if isinstance(parsed, dict):
-                items.append(parsed)
-    return items
-
-
-def _score_from_json(value: object) -> Scoreline:
-    if not isinstance(value, dict):
-        msg = "Invalid scoreline JSON"
-        raise ValueError(msg)
-    return Scoreline(home=int(value["home"]), away=int(value["away"]))
 
 
 def _probabilities_to_json(value: ProbabilityProfile | None) -> str | None:
@@ -520,12 +398,6 @@ def _optional_int(value: object) -> int | None:
         msg = "Invalid int value"
         raise ValueError(msg)
     return int(value)
-
-
-def _list(value: object) -> list[object]:
-    if not isinstance(value, list):
-        return []
-    return cast(list[object], value)
 
 
 def _bool_to_int(value: bool) -> int:

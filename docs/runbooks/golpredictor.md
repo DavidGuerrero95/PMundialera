@@ -127,10 +127,6 @@ regenerated from settled GolPredictor results and summarizes team form, goals
 for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
 tournament tempo.
 
-If legacy files exist under `.pmundialera/`, the SQLite store imports
-`predictions.jsonl`, `outcomes.jsonl`, `learning-memory.md`, and
-`tournament-state.md` the first time the database is initialized.
-
 Commands:
 
 ```powershell
