@@ -38,6 +38,10 @@ Prediction selection must be probability-first. Estimate home/draw/away,
 over/under, both-teams-to-score, and expected goals before deriving the exact
 scoreline. Use learning memory as a weak prior, especially with small samples;
 do not memorize one-off team results or overfit a single settled match.
+After each settled matchday, persist current tournament state: team form, goals
+for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
+draw/open-match tournament tempo. Inject only match-relevant team state into the
+next prediction.
 General uncertainty is not draw evidence. Draw must be supported by concrete
 signals such as market draw price, under profile, low block, goalkeeper edge,
 low conversion, fatigue, or matchup constraints. When class gap, market, form,

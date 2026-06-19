@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime
 
+from mundialera.application.tournament_state import build_tournament_state_memory
 from mundialera.domain.models import Match, PredictionOutcome, PredictionRecord, Scoreline
 from mundialera.domain.ports import FixtureRepository
 from mundialera.infrastructure.local_store.history import JsonlPredictionStore
@@ -27,8 +28,11 @@ class FeedbackService:
             if record.submitted and not record.dry_run
         ]
         outcomes: list[PredictionOutcome] = []
+        all_matches: list[Match] = []
         for group_name in group_names:
-            matches = {match.match_id: match for match in self._fixtures.list_matches(group_name)}
+            group_matches = self._fixtures.list_matches(group_name)
+            all_matches.extend(group_matches)
+            matches = {match.match_id: match for match in group_matches}
             for record in records:
                 if record.group != group_name:
                     continue
@@ -38,6 +42,7 @@ class FeedbackService:
                 outcomes.append(_build_outcome(record, match, self._now))
         count = self._store.record_outcomes(outcomes)
         self._store.write_learning_memory(build_learning_memory(self._store.load_outcomes()))
+        self._store.write_tournament_state_memory(build_tournament_state_memory(all_matches))
         return count
 
     def close(self) -> None:

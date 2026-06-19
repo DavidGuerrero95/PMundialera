@@ -369,6 +369,7 @@ def feedback_status() -> None:
     console.print(f"Prediction records: {len(records)}")
     console.print(f"Settled outcomes: {len(outcomes)}")
     console.print(f"Learning memory: {store.learning_path}")
+    console.print(f"Tournament state: {store.tournament_state_path}")
     if store.load_learning_memory():
         console.print(store.load_learning_memory())
 

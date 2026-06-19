@@ -119,10 +119,14 @@ The local feedback files live under `.pmundialera/`:
 - `predictions.jsonl`: predictions generated during submission windows
 - `outcomes.jsonl`: settled predictions after GolPredictor publishes results
 - `learning-memory.md`: compact lessons injected into future Codex prompts
+- `tournament-state.md`: current team/tournament form injected into future research
 
 `predictions.jsonl` is an append-only operational event log for prediction
 decisions. New records include probabilities and guardrail flags so future
 analysis can improve calibration without overfitting to one match.
+`tournament-state.md` is regenerated from settled GolPredictor results and
+summarizes team form, goals for/against, open/closed profile, BTTS profile, hot
+attacks, leaky defenses, and tournament tempo.
 
 Commands:
 

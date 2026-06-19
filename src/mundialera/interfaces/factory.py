@@ -6,6 +6,7 @@ from mundialera.application.clock import SystemClock
 from mundialera.application.feedback import FeedbackService
 from mundialera.application.orchestrator import PredictionOrchestrator
 from mundialera.application.subagents import HeuristicPredictionModel, default_research_agent
+from mundialera.application.tournament_memory import TournamentMemoryResearchAgent
 from mundialera.domain.ports import PredictionModel, ResearchAgent
 from mundialera.infrastructure.codex.prediction_model import CodexCliConfig, CodexCliPredictionModel
 from mundialera.infrastructure.golpredictor.client import (
@@ -44,6 +45,7 @@ def build_prediction_model(settings: Settings | None = None) -> PredictionModel:
     heuristic_model = HeuristicPredictionModel()
     if resolved.pmundialera_prediction_engine.casefold() != "codex":
         return heuristic_model
+    context_memory = _combined_prediction_memory(store)
     return CodexCliPredictionModel(
         CodexCliConfig(
             executable=resolved.pmundialera_codex_executable,
@@ -52,13 +54,16 @@ def build_prediction_model(settings: Settings | None = None) -> PredictionModel:
             timeout_seconds=resolved.pmundialera_codex_timeout_seconds,
         ),
         fallback=heuristic_model,
-        learning_memory=store.load_learning_memory(),
+        learning_memory=context_memory,
     )
 
 
 def build_research_agent(settings: Settings | None = None) -> ResearchAgent:
     resolved = settings or get_settings()
     extra_research_agents: list[ResearchAgent] = []
+    tournament_state = build_prediction_store(resolved).load_tournament_state_memory()
+    if tournament_state:
+        extra_research_agents.append(TournamentMemoryResearchAgent(tournament_state))
     if resolved.pmundialera_enable_web_research:
         extra_research_agents.append(
             WebSearchResearchAgent(
@@ -71,6 +76,15 @@ def build_research_agent(settings: Settings | None = None) -> ResearchAgent:
             )
         )
     return default_research_agent(extra_research_agents)
+
+
+def _combined_prediction_memory(store: JsonlPredictionStore) -> str:
+    sections = [
+        item
+        for item in (store.load_learning_memory(), store.load_tournament_state_memory())
+        if item
+    ]
+    return "\n\n".join(sections)
 
 
 def build_orchestrator(settings: Settings | None = None) -> PredictionOrchestrator:

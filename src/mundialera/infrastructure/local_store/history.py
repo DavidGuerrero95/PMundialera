@@ -26,11 +26,16 @@ class JsonlPredictionStore(PredictionRecorder, PredictionHistory):
         self._predictions_path = base_dir / "predictions.jsonl"
         self._outcomes_path = base_dir / "outcomes.jsonl"
         self._learning_path = base_dir / "learning-memory.md"
+        self._tournament_state_path = base_dir / "tournament-state.md"
         self._base_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def learning_path(self) -> Path:
         return self._learning_path
+
+    @property
+    def tournament_state_path(self) -> Path:
+        return self._tournament_state_path
 
     def record_prediction(
         self,
@@ -78,6 +83,14 @@ class JsonlPredictionStore(PredictionRecorder, PredictionHistory):
 
     def write_learning_memory(self, content: str) -> None:
         self._learning_path.write_text(content.strip() + "\n", encoding="utf-8")
+
+    def load_tournament_state_memory(self) -> str:
+        if not self._tournament_state_path.exists():
+            return ""
+        return self._tournament_state_path.read_text(encoding="utf-8").strip()
+
+    def write_tournament_state_memory(self, content: str) -> None:
+        self._tournament_state_path.write_text(content.strip() + "\n", encoding="utf-8")
 
     @staticmethod
     def _append_json(path: Path, payload: dict[str, object]) -> None:

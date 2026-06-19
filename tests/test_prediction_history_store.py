@@ -50,3 +50,12 @@ def test_prediction_store_persists_probability_profile_and_decision_flags(tmp_pa
 
     assert loaded.probabilities == profile
     assert loaded.decision_flags == ["draw-risk-covered-in-hedge"]
+
+
+def test_prediction_store_persists_tournament_state_memory(tmp_path: Path) -> None:
+    store = JsonlPredictionStore(tmp_path, timezone_name="America/Bogota")
+
+    store.write_tournament_state_memory("# state\n- Canadá: P1 W1")
+
+    assert store.load_tournament_state_memory() == "# state\n- Canadá: P1 W1"
+    assert store.tournament_state_path.name == "tournament-state.md"

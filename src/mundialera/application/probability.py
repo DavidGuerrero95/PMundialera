@@ -12,6 +12,10 @@ OVER_TERMS = (
     "both teams",
     "ambos anotan",
     "high scoring",
+    "open_profile",
+    "open match rate",
+    "hot attacks",
+    "leaky defenses",
 )
 UNDER_TERMS = (
     "under",
@@ -19,6 +23,9 @@ UNDER_TERMS = (
     "low-scoring",
     "defensive",
     "defensivo",
+    "close_profile",
+    "closed-match",
+    "clean sheet",
 )
 HOME_FAVORITE_TERMS = ("home favorite", "local favorito", "favorito local")
 AWAY_FAVORITE_TERMS = ("away favorite", "visitante favorito", "favorito visitante")

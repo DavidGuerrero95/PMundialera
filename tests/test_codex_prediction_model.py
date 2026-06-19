@@ -80,7 +80,10 @@ def test_codex_prompt_includes_calibration_payload() -> None:
         ),
     )
 
-    prompt = _build_prediction_prompt(brief, learning_memory="")
+    prompt = _build_prediction_prompt(
+        brief,
+        learning_memory="# PMundialera tournament state\n- Average goals: 3.25",
+    )
 
     assert '"calibration"' in prompt
     assert '"probability_profile"' in prompt
@@ -88,3 +91,6 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert '"expected_home_goals": 1.05' in prompt
     assert "no uses marcadores comodos del favorito" in prompt
     assert "Usa probability_profile como baseline numerico" in prompt
+    assert "forma real tras primera fase" in prompt
+    assert "# PMundialera tournament state" in prompt
+    assert "genera un plan de investigacion interno" in prompt
