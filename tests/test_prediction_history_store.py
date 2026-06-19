@@ -135,11 +135,31 @@ def test_prediction_prompt_memory_uses_sqlite_only(tmp_path: Path) -> None:
     store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
     store.write_learning_memory("# sqlite learning")
     store.write_tournament_state_memory("# sqlite state")
+    store.record_research_brief(
+        ResearchBrief(
+            match=Match(match_id="32", kickoff=None, home=Team("USA"), away=Team("Australia")),
+            evidence=[],
+            structured_evidence=[
+                EvidenceItem(
+                    category=EvidenceCategory.PLAYER_CONTEXT,
+                    title="Star player",
+                    summary="Pulisic and Balogun arrive as differential attacking players.",
+                    url="https://example.test/star",
+                    source="example.test",
+                    tier=SourceTier.GENERIC_WEB,
+                    confidence=0.66,
+                )
+            ],
+            uncertainty=[],
+        )
+    )
 
     memory = _combined_prediction_memory(store)
 
     assert "# sqlite learning" in memory
     assert "# sqlite state" in memory
+    assert "# PMundialera recent research signals" in memory
+    assert "Pulisic and Balogun" in memory
     assert "legacy" not in memory
 
 
@@ -187,6 +207,15 @@ def test_prediction_store_persists_match_research_dimensions(tmp_path: Path) -> 
                 confidence=0.58,
             ),
             EvidenceItem(
+                category=EvidenceCategory.PLAYER_CONTEXT,
+                title="Jugador estrella desequilibrante",
+                summary="El jugador clave llega titular, en buen ritmo y con regate diferencial.",
+                url="https://example.test/star",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.67,
+            ),
+            EvidenceItem(
                 category=EvidenceCategory.GOALKEEPERS_DEFENSE,
                 title="Buena defensa y mala defensa",
                 summary="Portero local fuerte; visitante concede por laterales.",
@@ -226,4 +255,7 @@ def test_prediction_store_persists_match_research_dimensions(tmp_path: Path) -> 
     assert loaded.analysis_dimensions["buen_ataque"]
     assert loaded.analysis_dimensions["buena_defensa"]
     assert loaded.analysis_dimensions["mala_defensa"]
+    assert loaded.analysis_dimensions["jugadores_estrellas_desequilibrantes"]
+    assert loaded.star_player_signals
+    assert any("regate diferencial" in item for item in loaded.star_player_signals)
     assert "market" in loaded.analysis_dimensions["gaps_evidencia"]

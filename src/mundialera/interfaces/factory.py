@@ -81,10 +81,47 @@ def build_research_agent(settings: Settings | None = None) -> ResearchAgent:
 def _combined_prediction_memory(store: SqlitePredictionStore) -> str:
     sections = [
         item
-        for item in (store.load_learning_memory(), store.load_tournament_state_memory())
+        for item in (
+            store.load_learning_memory(),
+            store.load_tournament_state_memory(),
+            _recent_research_memory(store),
+        )
         if item
     ]
     return "\n\n".join(sections)
+
+
+def _recent_research_memory(store: SqlitePredictionStore) -> str:
+    lines = ["# PMundialera recent research signals"]
+    for record in store.load_research_records()[-8:]:
+        signals = [
+            signal for signal in record.star_player_signals if _usable_star_player_signal(signal)
+        ]
+        if not signals:
+            continue
+        lines.append(f"- {record.match_label}:")
+        for signal in signals[:3]:
+            lines.append(f"  - star_player_signal: {_compact_memory_line(signal)}")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
+def _usable_star_player_signal(value: str) -> bool:
+    normalized = value.casefold()
+    negative_markers = (
+        "sin resultados",
+        "fallo consulta",
+        "page-scrape: fallo",
+        "connecterror",
+        "httpstatuserror",
+    )
+    return not any(marker in normalized for marker in negative_markers)
+
+
+def _compact_memory_line(value: str, *, limit: int = 1000) -> str:
+    line = " ".join(value.split())
+    if len(line) <= limit:
+        return line
+    return f"{line[: limit - 3]}..."
 
 
 def build_orchestrator(settings: Settings | None = None) -> PredictionOrchestrator:

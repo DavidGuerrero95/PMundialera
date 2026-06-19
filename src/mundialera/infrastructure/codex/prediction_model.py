@@ -101,6 +101,12 @@ def _inject_model_arg(args: list[str], model: str) -> list[str]:
 
 def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> str:
     match = brief.match
+    star_player_signals = _star_player_signals_from_brief(brief)
+    if not star_player_signals:
+        star_player_signals = _star_player_signals_from_memory(
+            learning_memory,
+            match_label=match.label,
+        )
     context = {
         "match": {
             "id": match.match_id,
@@ -126,11 +132,13 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
             for item in brief.structured_evidence
         ],
         "uncertainty": brief.uncertainty,
+        "star_player_signals": star_player_signals,
         "expected_analysis_dimensions": [
             "equipos",
             "torneo",
             "jugadores",
             "jugadores_diferenciables",
+            "jugadores_estrellas_desequilibrantes",
             "arbitros",
             "faltas_tarjetas",
             "hinchada",
@@ -196,12 +204,28 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
 
         - equipos y estado del torneo
         - jugadores, jugadores diferenciales, noticias personales/profesionales
+        - jugadores estrella y desequilibrantes capaces de romper el partido
         - arbitros, faltas, tarjetas, penales y disciplina
         - hinchada, localia, sede, estadio, cancha y clima
         - titularidad, suplencia, rotaciones, convocados, lesionados y sancionados
         - buen ritmo, mal ritmo, partido abierto o partido cerrado
         - buen ataque, mal ataque, buena defensa y mala defensa
         - porteros, centrales, laterales, balon parado y fragilidad defensiva
+
+        ## Jugadores estrella y desequilibrantes
+
+        Trata `star_player_signals` como un dato de alto impacto. Para cada equipo,
+        evalua si existe un jugador capaz de alterar el marcador por:
+
+        - remate, xG, asistencias, conduccion o regate
+        - balon parado, penales o tiros libres
+        - volumen reciente de minutos y estado fisico
+        - rol tactico real: titular, suplente revulsivo o ausencia sensible
+        - noticias personales/profesionales que afecten foco o disponibilidad
+
+        Si una estrella esta disponible y en buen ritmo, puede justificar subir techo
+        ofensivo, BTTS u over. Si falta, llega tocada o no inicia, reduce confianza y
+        explicalo en `evidence_gaps` o `risk_flags`.
 
         ## Memoria de torneo y aprendizaje
 
@@ -311,6 +335,92 @@ def _prediction_from_payload(brief: ResearchBrief, payload: dict[str, object]) -
         rationale=["Codex CLI prediction engine.", *rationale],
         probabilities=brief.probability_profile,
     )
+
+
+def _star_player_signals_from_brief(brief: ResearchBrief) -> list[str]:
+    terms = (
+        "estrella",
+        "desequilibrante",
+        "desequilibrio",
+        "differencemaker",
+        "game changer",
+        "key player",
+        "jugador clave",
+        "figura",
+    )
+    player_signal_terms = (
+        "alineación",
+        "alineacion",
+        "asistencias",
+        "atacantes",
+        "capitán",
+        "capitan",
+        "convocados",
+        "goleador",
+        "goleiro",
+        "goles",
+        "jugadores",
+        "mercado",
+        "min.",
+        "minutos",
+        "penaltis",
+        "puntos",
+        "sustituciones",
+        "titular",
+        "valores",
+    )
+    player_signal_categories = {
+        "player_context",
+        "availability",
+        "tactics",
+        "market",
+        "news",
+        "recent_match_stats",
+    }
+    signals: list[str] = []
+    seen: set[str] = set()
+
+    def add_signal(value: str) -> None:
+        normalized_value = value.strip()
+        if not normalized_value or normalized_value in seen or len(signals) >= 8:
+            return
+        signals.append(normalized_value)
+        seen.add(normalized_value)
+
+    for item in brief.structured_evidence:
+        text = f"{item.category.value}: {item.title}. {item.summary}"
+        normalized = text.casefold()
+        if item.category.value == "player_context" or (
+            item.category.value in player_signal_categories
+            and any(term in normalized for term in player_signal_terms)
+        ):
+            add_signal(text)
+
+    for raw_signal in brief.evidence:
+        if any(term in raw_signal.casefold() for term in terms):
+            add_signal(raw_signal)
+
+    return signals
+
+
+def _star_player_signals_from_memory(learning_memory: str, *, match_label: str) -> list[str]:
+    signals: list[str] = []
+    active_match = False
+    match_header = f"- {match_label}:"
+    for line in learning_memory.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- ") and not stripped.startswith("- star_player_signal:"):
+            active_match = stripped == match_header
+            continue
+        if not active_match or "star_player_signal:" not in stripped:
+            continue
+        _, _, signal = stripped.partition("star_player_signal:")
+        normalized_signal = signal.strip()
+        if normalized_signal:
+            signals.append(normalized_signal)
+        if len(signals) >= 8:
+            break
+    return signals
 
 
 def _scoreline_from_payload(value: object) -> Scoreline:

@@ -66,6 +66,7 @@ def test_web_search_research_includes_player_context_queries() -> None:
     )
 
     assert any(item.category == EvidenceCategory.PLAYER_CONTEXT for item in queries)
+    assert any("jugadores estrella desequilibrantes" in item.query for item in queries)
     assert any("noticias personales profesionales" in item.query for item in queries)
     assert any(item.category == EvidenceCategory.RECENT_MATCH_STATS for item in queries)
     assert any("xG tiros atajadas corners" in item.query for item in queries)

@@ -132,7 +132,9 @@ tournament tempo.
 uncertainties, calibration, probability profile, and analysis dimensions for
 teams, tournament state, players, differential players, referees, fouls/cards,
 fans, venue/pitch/weather, starters, bench, injuries/suspensions/callups, rhythm,
-attack quality, and defensive quality.
+attack quality, and defensive quality. It also stores `star_player_signals` as a
+dedicated field for star or disruptive players that can change attacking ceiling,
+BTTS, over/under, or match volatility.
 
 Commands:
 

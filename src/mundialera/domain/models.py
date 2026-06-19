@@ -216,6 +216,7 @@ class ResearchRecord:
     calibration: PredictionCalibration | None = None
     probabilities: ProbabilityProfile | None = None
     analysis_dimensions: dict[str, list[str]] = field(default_factory=dict)
+    star_player_signals: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

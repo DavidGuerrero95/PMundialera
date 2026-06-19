@@ -23,7 +23,7 @@ from mundialera.domain.models import (
 )
 from mundialera.domain.ports import PredictionHistory, PredictionRecorder, ResearchRecorder
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 ANALYSIS_DIMENSION_TERMS: dict[str, tuple[str, ...]] = {
@@ -31,6 +31,16 @@ ANALYSIS_DIMENSION_TERMS: dict[str, tuple[str, ...]] = {
     "torneo": ("mundial", "grupo", "tabla", "puntos", "diferencia de gol"),
     "jugadores": ("jugador", "player", "capitan", "figura", "delantero", "mediocampista"),
     "jugadores_diferenciables": ("estrella", "diferencial", "key player", "jugador clave"),
+    "jugadores_estrellas_desequilibrantes": (
+        "estrella",
+        "desequilibrante",
+        "desequilibrio",
+        "differencemaker",
+        "game changer",
+        "key player",
+        "jugador clave",
+        "figura",
+    ),
     "arbitros": ("arbitro", "referee"),
     "faltas_tarjetas": ("falta", "tarjeta", "cards", "disciplina", "penal"),
     "hinchada": ("hinchada", "aficion", "fans", "supporters", "localia"),
@@ -117,6 +127,7 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
             calibration=brief.calibration,
             probabilities=brief.probability_profile,
             analysis_dimensions=_analysis_dimensions_from_brief(brief),
+            star_player_signals=_star_player_signals_from_brief(brief),
         )
         with self._connect() as connection:
             self._insert_research_record(connection, record)
@@ -163,7 +174,7 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 SELECT record_id, created_at, group_name, match_id, match_label, kickoff,
                        home_team, away_team, evidence_json, structured_evidence_json,
                        uncertainty_json, calibration_json, probabilities_json,
-                       analysis_dimensions_json
+                       analysis_dimensions_json, star_player_signals_json
                 FROM match_research
                 ORDER BY created_at ASC, rowid ASC
                 """
@@ -266,7 +277,8 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 uncertainty_json TEXT NOT NULL,
                 calibration_json TEXT,
                 probabilities_json TEXT,
-                analysis_dimensions_json TEXT NOT NULL
+                analysis_dimensions_json TEXT NOT NULL,
+                star_player_signals_json TEXT NOT NULL DEFAULT '[]'
             );
 
             CREATE INDEX IF NOT EXISTS idx_match_research_group_match
@@ -275,6 +287,7 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 ON match_research(created_at);
             """
         )
+        _ensure_match_research_star_player_column(connection)
         self._write_metadata("schema_version", str(SCHEMA_VERSION), connection=connection)
 
     def _insert_prediction(
@@ -360,9 +373,9 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 record_id, created_at, group_name, match_id, match_label, kickoff,
                 home_team, away_team, evidence_json, structured_evidence_json,
                 uncertainty_json, calibration_json, probabilities_json,
-                analysis_dimensions_json
+                analysis_dimensions_json, star_player_signals_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.record_id,
@@ -379,6 +392,7 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 _calibration_to_json(record.calibration),
                 _probabilities_to_json(record.probabilities),
                 json.dumps(record.analysis_dimensions, ensure_ascii=False, sort_keys=True),
+                json.dumps(record.star_player_signals, ensure_ascii=False),
             ),
         )
 
@@ -480,6 +494,7 @@ def _research_record_from_row(row: sqlite3.Row) -> ResearchRecord:
         calibration=_calibration_from_json(row["calibration_json"]),
         probabilities=_probabilities_from_json(row["probabilities_json"]),
         analysis_dimensions=_analysis_dimensions_from_json(row["analysis_dimensions_json"]),
+        star_player_signals=_json_string_list(row["star_player_signals_json"]),
     )
 
 
@@ -643,6 +658,65 @@ def _analysis_dimensions_from_brief(brief: ResearchBrief) -> dict[str, list[str]
     return dimensions
 
 
+def _star_player_signals_from_brief(brief: ResearchBrief) -> list[str]:
+    terms = ANALYSIS_DIMENSION_TERMS["jugadores_estrellas_desequilibrantes"]
+    player_signal_terms = (
+        "alineación",
+        "alineacion",
+        "asistencias",
+        "atacantes",
+        "capitán",
+        "capitan",
+        "convocados",
+        "goleador",
+        "goleiro",
+        "goles",
+        "jugadores",
+        "mercado",
+        "min.",
+        "minutos",
+        "penaltis",
+        "puntos",
+        "sustituciones",
+        "titular",
+        "valores",
+    )
+    player_signal_categories = {
+        EvidenceCategory.PLAYER_CONTEXT,
+        EvidenceCategory.AVAILABILITY,
+        EvidenceCategory.TACTICS,
+        EvidenceCategory.MARKET,
+        EvidenceCategory.NEWS,
+        EvidenceCategory.RECENT_MATCH_STATS,
+    }
+    signals: list[str] = []
+    seen: set[str] = set()
+
+    def add_signal(value: str) -> None:
+        normalized_value = value.strip()
+        if not normalized_value or normalized_value in seen or len(signals) >= 8:
+            return
+        signals.append(normalized_value)
+        seen.add(normalized_value)
+
+    for item in brief.structured_evidence:
+        text = f"{item.category.value}: {item.title}. {item.summary}"
+        normalized = text.casefold()
+        if item.category == EvidenceCategory.PLAYER_CONTEXT or (
+            item.category in player_signal_categories
+            and any(term in normalized for term in player_signal_terms)
+        ):
+            add_signal(text)
+
+    for raw_signal in brief.evidence:
+        normalized = raw_signal.casefold()
+        if any(term in normalized for term in terms):
+            add_signal(raw_signal)
+
+    return signals
+    return signals
+
+
 def _analysis_dimensions_from_json(value: object) -> dict[str, list[str]]:
     parsed = json.loads(str(value)) if isinstance(value, str) else value
     if not isinstance(parsed, dict):
@@ -680,3 +754,15 @@ def _optional_int(value: object) -> int | None:
 
 def _bool_to_int(value: bool) -> int:
     return 1 if value else 0
+
+
+def _ensure_match_research_star_player_column(connection: sqlite3.Connection) -> None:
+    columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(match_research)").fetchall()
+    }
+    if "star_player_signals_json" not in columns:
+        connection.execute(
+            "ALTER TABLE match_research "
+            "ADD COLUMN star_player_signals_json TEXT NOT NULL DEFAULT '[]'"
+        )

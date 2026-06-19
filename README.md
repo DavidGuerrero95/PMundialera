@@ -215,8 +215,9 @@ El prompt incluye:
 - historico visible en GolPredictor
 - incertidumbres de los subagentes
 - dimensiones obligatorias: equipos, torneo, jugadores, jugadores diferenciales,
-  arbitros, faltas/tarjetas, hinchada, sede/cancha/clima, titularidad,
-  suplencia, lesionados/sancionados/convocados, ritmo, ataque y defensa
+  jugadores estrella/desequilibrantes, arbitros, faltas/tarjetas, hinchada,
+  sede/cancha/clima, titularidad, suplencia, lesionados/sancionados/convocados,
+  ritmo, ataque y defensa
 - perfil probabilistico 1X2, over/under, ambos anotan y goles esperados
 - calibracion de evidencia, empate y sesgo de favorito
 - reglas de salida JSON
@@ -278,7 +279,9 @@ predicciones como el briefing de investigacion por partido. La tabla
 estructurada por categoria, incertidumbres, calibracion, perfil probabilistico y
 un indice de dimensiones para jugadores, titulares, suplentes, lesionados,
 convocados, arbitraje, faltas/tarjetas, hinchada, sede/cancha/clima, ritmo,
-ataque, defensa y jugadores diferenciales.
+ataque, defensa y jugadores diferenciales. Tambien persiste `star_player_signals`
+como dato dedicado para estrellas o jugadores desequilibrantes que puedan subir
+techo ofensivo, BTTS, over o cambiar el riesgo de marcador.
 
 ## ValidaciÃ³n
 

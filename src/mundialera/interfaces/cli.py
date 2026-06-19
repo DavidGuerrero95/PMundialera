@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from typing import Annotated
 
@@ -108,8 +109,8 @@ def predict(
     match = Match(match_id="manual", kickoff=None, home=Team(home), away=Team(away))
     brief = build_research_agent(settings).research(match)
     prediction = build_prediction_model(settings).predict(brief)
-    console.print_json(
-        data={
+    _print_json(
+        {
             "match": match.label,
             "primary": prediction.primary.label(),
             "hedge": prediction.hedge.label(),
@@ -133,26 +134,22 @@ def run_window(
     orchestrator = build_orchestrator(settings)
     result = orchestrator.run_group_window(group, dry_run=effective_dry_run)
     if json_output:
-        console.print(
-            json.dumps(
-                {
-                    "group": result.group_name,
-                    "evaluated": [_prediction_to_dict(item) for item in result.evaluated],
-                    "submitted": [
-                        {
-                            "match": item.match.label,
-                            "scoreline": item.scoreline.label(),
-                            "submitted": item.submitted,
-                            "dry_run": item.dry_run,
-                            "message": item.message,
-                        }
-                        for item in result.submitted
-                    ],
-                    "skipped": result.skipped,
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
+        _print_json(
+            {
+                "group": result.group_name,
+                "evaluated": [_prediction_to_dict(item) for item in result.evaluated],
+                "submitted": [
+                    {
+                        "match": item.match.label,
+                        "scoreline": item.scoreline.label(),
+                        "submitted": item.submitted,
+                        "dry_run": item.dry_run,
+                        "message": item.message,
+                    }
+                    for item in result.submitted
+                ],
+                "skipped": result.skipped,
+            }
         )
         return
 
@@ -196,7 +193,7 @@ def run_once(
         for result in results
     ]
     if json_output:
-        console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+        _print_json(payload)
         return
     for result in results:
         console.print(f"Group: {result.group_name}")
@@ -221,7 +218,7 @@ def run_next(
         for group in settings.configured_groups()
     }
     if json_output:
-        console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+        _print_json(payload)
         return
     for group, predictions in payload.items():
         console.print(f"Group: {group}")
@@ -287,27 +284,23 @@ def run_schedule(
         pre_window_buffer_seconds=pre_window_buffer_seconds,
     )
     next_match = decision.next_match
-    console.print(
-        json.dumps(
-            {
-                "now": decision.now.isoformat(),
-                "in_window": decision.in_window,
-                "sleep_seconds": decision.sleep_seconds,
-                "reason": decision.reason,
-                "next_match": None
-                if next_match is None
-                else {
-                    "match_id": next_match.match_id,
-                    "match": next_match.label,
-                    "kickoff": next_match.kickoff.isoformat()
-                    if next_match.kickoff is not None
-                    else None,
-                    "group": next_match.group,
-                },
+    _print_json(
+        {
+            "now": decision.now.isoformat(),
+            "in_window": decision.in_window,
+            "sleep_seconds": decision.sleep_seconds,
+            "reason": decision.reason,
+            "next_match": None
+            if next_match is None
+            else {
+                "match_id": next_match.match_id,
+                "match": next_match.label,
+                "kickoff": next_match.kickoff.isoformat()
+                if next_match.kickoff is not None
+                else None,
+                "group": next_match.group,
             },
-            ensure_ascii=False,
-            indent=2,
-        )
+        }
     )
 
 
@@ -355,7 +348,7 @@ def feedback_settle(
         "database": str(build_prediction_store(settings).database_path),
     }
     if json_output:
-        console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+        _print_json(payload)
         return
     console.print(f"Feedback settled. New outcomes: {count}")
     console.print(f"SQLite database: {payload['database']}")
@@ -371,6 +364,16 @@ def feedback_status() -> None:
     console.print(f"SQLite database: {store.database_path}")
     if store.load_learning_memory():
         console.print(store.load_learning_memory())
+
+
+def _print_json(payload: object) -> None:
+    text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    stdout_buffer = getattr(sys.stdout, "buffer", None)
+    if stdout_buffer is None:
+        sys.stdout.write(text)
+        return
+    stdout_buffer.write(text.encode("utf-8", errors="replace"))
+    stdout_buffer.flush()
 
 
 if __name__ == "__main__":

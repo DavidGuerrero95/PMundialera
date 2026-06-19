@@ -5,10 +5,12 @@ from pathlib import Path
 
 from mundialera.domain.models import (
     EvidenceCategory,
+    EvidenceItem,
     Match,
     PredictionCalibration,
     ProbabilityProfile,
     ResearchBrief,
+    SourceTier,
     Team,
 )
 from mundialera.infrastructure.codex.prediction_model import (
@@ -78,6 +80,17 @@ def test_codex_prompt_includes_calibration_payload() -> None:
             expected_home_goals=1.05,
             expected_away_goals=1.22,
         ),
+        structured_evidence=[
+            EvidenceItem(
+                category=EvidenceCategory.PLAYER_CONTEXT,
+                title="Jugador clave disponible",
+                summary="La figura ofensiva llega como estrella desequilibrante y titular.",
+                url="https://example.test/player",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.61,
+            )
+        ],
     )
 
     prompt = _build_prediction_prompt(
@@ -91,13 +104,17 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert '"expected_home_goals": 1.05' in prompt
     assert prompt.startswith("# Pronostico GolPredictor")
     assert "## Dimensiones obligatorias de analisis" in prompt
+    assert "## Jugadores estrella y desequilibrantes" in prompt
     assert "## Reglas de decision" in prompt
     assert "## Formato de salida obligatorio" in prompt
     assert "```json" in prompt
+    assert '"star_player_signals"' in prompt
     assert '"expected_analysis_dimensions"' in prompt
     assert '"jugadores_diferenciables"' in prompt
+    assert '"jugadores_estrellas_desequilibrantes"' in prompt
     assert '"lesionados_sancionados_convocados"' in prompt
     assert '"faltas_tarjetas"' in prompt
+    assert "estrella desequilibrante" in prompt
     assert "tu respuesta debe ser exclusivamente\n        JSON valido" not in prompt
     assert "tu respuesta debe ser exclusivamente\nJSON valido" in prompt
     assert "marcadores comodos" in prompt
@@ -106,3 +123,28 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert "forma real tras primera fase" in prompt
     assert "# PMundialera tournament state" in prompt
     assert "genera un plan de investigacion interno" in prompt
+
+
+def test_codex_prompt_uses_match_scoped_star_player_memory() -> None:
+    match = Match(
+        match_id="32",
+        kickoff=None,
+        home=Team("Estados Unidos"),
+        away=Team("Australia"),
+    )
+    brief = ResearchBrief(match=match, evidence=[], uncertainty=[])
+
+    prompt = _build_prediction_prompt(
+        brief,
+        learning_memory=(
+            "# PMundialera recent research signals\n"
+            "- Estados Unidos - Australia:\n"
+            "  - star_player_signal: Pulisic and Balogun are differential attackers.\n"
+            "- Francia - Senegal:\n"
+            "  - star_player_signal: unrelated player context.\n"
+        ),
+    )
+
+    assert "Pulisic and Balogun" in prompt
+    assert "unrelated player context" in prompt
+    assert '"star_player_signals": [\n    "Pulisic and Balogun' in prompt

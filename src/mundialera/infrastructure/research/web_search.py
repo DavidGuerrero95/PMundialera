@@ -196,7 +196,8 @@ class WebSearchResearchAgent(ResearchAgent):
             ),
             QuerySpec(
                 EvidenceCategory.PLAYER_CONTEXT,
-                f"{label} jugadores clave rendimiento individual minutos recientes mundial 2026",
+                f"{label} jugadores estrella desequilibrantes jugadores clave rendimiento "
+                "individual minutos recientes mundial 2026",
             ),
             QuerySpec(
                 EvidenceCategory.PLAYER_CONTEXT,
