@@ -68,6 +68,23 @@ class FixedPredictionModel:
         )
 
 
+class RecordingResearchAgent:
+    def research(self, match: Match) -> ResearchBrief:
+        return ResearchBrief(
+            match=match,
+            evidence=["titularidad, lesionados, arbitro, hinchada y sede revisados"],
+            uncertainty=["mercado pendiente"],
+        )
+
+
+class FakeResearchRecorder:
+    def __init__(self) -> None:
+        self.briefs: list[ResearchBrief] = []
+
+    def record_research_brief(self, brief: ResearchBrief) -> None:
+        self.briefs.append(brief)
+
+
 def test_run_group_window_only_predicts_inside_window() -> None:
     tz = ZoneInfo("America/Bogota")
     now = datetime(2026, 6, 15, 13, 45, tzinfo=tz)
@@ -135,3 +152,32 @@ def test_run_group_window_uses_hedge_for_configured_group() -> None:
 
     assert corex.submitted[0].scoreline == corex.evaluated[0].primary
     assert fifa.submitted[0].scoreline == fifa.evaluated[0].hedge
+
+
+def test_predict_match_records_research_brief_before_prediction() -> None:
+    tz = ZoneInfo("America/Bogota")
+    now = datetime(2026, 6, 15, 13, 45, tzinfo=tz)
+    match = Match(
+        match_id="32",
+        kickoff=now + timedelta(minutes=15),
+        home=Team("Estados Unidos"),
+        away=Team("Australia"),
+        group="Mundial CoreX",
+    )
+    recorder = FakeResearchRecorder()
+    orchestrator = PredictionOrchestrator(
+        fixtures=FakeFixtures([match]),
+        research_agent=RecordingResearchAgent(),
+        prediction_model=FixedPredictionModel(),
+        sink=FakeSink(),
+        clock=FakeClock(now),
+        submission_window_minutes=35,
+        research_recorder=recorder,
+    )
+
+    prediction = orchestrator.predict_match(match)
+
+    assert prediction.primary == Scoreline(2, 0)
+    assert len(recorder.briefs) == 1
+    assert recorder.briefs[0].match.match_id == "32"
+    assert "titularidad" in recorder.briefs[0].evidence[0]

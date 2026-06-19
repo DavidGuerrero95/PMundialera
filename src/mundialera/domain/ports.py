@@ -8,6 +8,7 @@ from mundialera.domain.models import (
     Prediction,
     PredictionRecord,
     ResearchBrief,
+    ResearchRecord,
     Scoreline,
     SubmissionResult,
 )
@@ -54,9 +55,17 @@ class PredictionRecorder(Protocol):
         """Return learning memory to include in future predictions."""
 
 
+class ResearchRecorder(Protocol):
+    def record_research_brief(self, brief: ResearchBrief) -> None:
+        """Persist the complete research and analysis context for a match."""
+
+
 class PredictionHistory(Protocol):
     def load_prediction_records(self) -> list[PredictionRecord]:
         """Return persisted prediction attempts."""
+
+    def load_research_records(self) -> list[ResearchRecord]:
+        """Return persisted research contexts."""
 
 
 class Clock(Protocol):

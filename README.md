@@ -1,23 +1,23 @@
-# PMundialera
+﻿# PMundialera
 
-Agente Python para investigar partidos, generar pronósticos y operar grupos de
+Agente Python para investigar partidos, generar pronÃ³sticos y operar grupos de
 GolPredictor con una arquitectura hexagonal y herramientas MCP.
 
 ## Estado
 
 Primera base funcional:
 
-- Cliente GolPredictor con login ASP.NET WebForms, scraping de tablas y envío
+- Cliente GolPredictor con login ASP.NET WebForms, scraping de tablas y envÃ­o
   controlado.
 - Subagentes especializados para forma deportiva, plantillas, contexto,
-  condiciones del partido y calibración de marcador.
-- Orquestador que produce dos pronósticos por partido.
+  condiciones del partido y calibraciÃ³n de marcador.
+- Orquestador que produce dos pronÃ³sticos por partido.
 - CLI auditable con `dry-run` por defecto.
-- Servidor MCP con herramientas para inspección, predicción y envío.
-- Reglas canónicas en `memory/` y adaptadores delgados en `.codex/`, `.cursor/`
+- Servidor MCP con herramientas para inspecciÃ³n, predicciÃ³n y envÃ­o.
+- Reglas canÃ³nicas en `memory/` y adaptadores delgados en `.codex/`, `.cursor/`
   y `.agents/`.
 
-## Instalación local
+## InstalaciÃ³n local
 
 ```powershell
 python -m venv .venv
@@ -181,10 +181,10 @@ Herramientas expuestas:
 
 ## Seguridad
 
-No se versionan credenciales. El envío a GolPredictor exige credenciales por
-variables de entorno y usa `dry-run` salvo que se pida explícitamente `--submit`.
+No se versionan credenciales. El envÃ­o a GolPredictor exige credenciales por
+variables de entorno y usa `dry-run` salvo que se pida explÃ­citamente `--submit`.
 
-## Investigación
+## InvestigaciÃ³n
 
 El flujo real puede activar busqueda web con DuckDuckGo HTML para recolectar
 titulares/snippets recientes por partido y, cuando la pagina es HTML accesible,
@@ -203,17 +203,25 @@ PMUNDIALERA_CODEX_EXECUTABLE=npx
 PMUNDIALERA_CODEX_ARGS=-y @openai/codex --search exec -
 ```
 
-El sistema construye un prompt con:
+El sistema construye un prompt Markdown con secciones de rol, evidencia,
+memoria de torneo/aprendizaje, reglas de decision, gaps de evidencia, contrato
+de salida y contexto JSON. El formato del prompt mejora la legibilidad para el
+LLM, pero la respuesta exigida sigue siendo JSON puro.
+
+El prompt incluye:
 
 - partido, grupo, kickoff y pronostico actual
 - evidencia web
 - historico visible en GolPredictor
 - incertidumbres de los subagentes
+- dimensiones obligatorias: equipos, torneo, jugadores, jugadores diferenciales,
+  arbitros, faltas/tarjetas, hinchada, sede/cancha/clima, titularidad,
+  suplencia, lesionados/sancionados/convocados, ritmo, ataque y defensa
 - perfil probabilistico 1X2, over/under, ambos anotan y goles esperados
 - calibracion de evidencia, empate y sesgo de favorito
 - reglas de salida JSON
 
-Codex debe devolver:
+Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 
 ```json
 {
@@ -264,7 +272,15 @@ Subagentes actuales:
 - sesgo de mercado/resultados recientes
 - busqueda web
 
-## Validación
+La persistencia local en `.pmundialera/pmundialera.sqlite3` guarda tanto las
+predicciones como el briefing de investigacion por partido. La tabla
+`match_research` conserva equipos, torneo/grupo, evidencia textual, evidencia
+estructurada por categoria, incertidumbres, calibracion, perfil probabilistico y
+un indice de dimensiones para jugadores, titulares, suplentes, lesionados,
+convocados, arbitraje, faltas/tarjetas, hinchada, sede/cancha/clima, ritmo,
+ataque, defensa y jugadores diferenciales.
+
+## ValidaciÃ³n
 
 ```powershell
 ruff check .

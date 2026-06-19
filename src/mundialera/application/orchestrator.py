@@ -12,6 +12,7 @@ from mundialera.domain.ports import (
     PredictionRecorder,
     PredictionSink,
     ResearchAgent,
+    ResearchRecorder,
 )
 
 
@@ -34,6 +35,7 @@ class PredictionOrchestrator:
         submission_window_minutes: int,
         hedge_group_names: set[str] | None = None,
         recorder: PredictionRecorder | None = None,
+        research_recorder: ResearchRecorder | None = None,
     ) -> None:
         self._fixtures = fixtures
         self._research_agent = research_agent
@@ -44,12 +46,15 @@ class PredictionOrchestrator:
         self._hedge_group_names = hedge_group_names or set()
         self._prediction_cache: dict[str, Prediction] = {}
         self._recorder = recorder
+        self._research_recorder = research_recorder
 
     def predict_match(self, match: Match) -> Prediction:
         cache_key = _prediction_cache_key(match)
         if cache_key in self._prediction_cache:
             return replace(self._prediction_cache[cache_key], match=match)
         brief = self._research_agent.research(match)
+        if self._research_recorder is not None:
+            self._research_recorder.record_research_brief(brief)
         prediction = apply_prediction_guardrails(self._prediction_model.predict(brief), brief)
         self._prediction_cache[cache_key] = prediction
         return prediction

@@ -118,6 +118,7 @@ The local feedback state lives in `.pmundialera/pmundialera.sqlite3`.
 
 - `predictions`: predictions generated during submission windows
 - `outcomes`: settled predictions after GolPredictor publishes results
+- `match_research`: full research brief captured before each prediction
 - `metadata.learning_memory`: compact lessons injected into future Codex prompts
 - `metadata.tournament_state`: current team/tournament form injected into future research
 
@@ -126,6 +127,12 @@ can improve calibration without overfitting to one match. Tournament state is
 regenerated from settled GolPredictor results and summarizes team form, goals
 for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
 tournament tempo.
+
+`match_research` stores match/team metadata, raw evidence, structured evidence,
+uncertainties, calibration, probability profile, and analysis dimensions for
+teams, tournament state, players, differential players, referees, fouls/cards,
+fans, venue/pitch/weather, starters, bench, injuries/suspensions/callups, rhythm,
+attack quality, and defensive quality.
 
 Commands:
 

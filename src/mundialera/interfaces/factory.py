@@ -100,6 +100,7 @@ def build_orchestrator(settings: Settings | None = None) -> PredictionOrchestrat
         submission_window_minutes=resolved.pmundialera_submission_window_minutes,
         hedge_group_names=resolved.hedge_groups(),
         recorder=store,
+        research_recorder=store,
     )
 
 

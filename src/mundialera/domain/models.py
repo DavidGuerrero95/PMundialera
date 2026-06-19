@@ -201,6 +201,24 @@ class PredictionRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class ResearchRecord:
+    record_id: str
+    created_at: datetime
+    group: str
+    match_id: str
+    match_label: str
+    kickoff: datetime | None
+    home_team: str
+    away_team: str
+    evidence: list[str]
+    structured_evidence: list[EvidenceItem]
+    uncertainty: list[str]
+    calibration: PredictionCalibration | None = None
+    probabilities: ProbabilityProfile | None = None
+    analysis_dimensions: dict[str, list[str]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class PredictionOutcome:
     record_id: str
     settled_at: datetime

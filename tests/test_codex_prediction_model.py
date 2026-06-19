@@ -89,8 +89,20 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert '"probability_profile"' in prompt
     assert '"draw_risk": 0.58' in prompt
     assert '"expected_home_goals": 1.05' in prompt
-    assert "no uses marcadores comodos del favorito" in prompt
-    assert "Usa probability_profile como baseline numerico" in prompt
+    assert prompt.startswith("# Pronostico GolPredictor")
+    assert "## Dimensiones obligatorias de analisis" in prompt
+    assert "## Reglas de decision" in prompt
+    assert "## Formato de salida obligatorio" in prompt
+    assert "```json" in prompt
+    assert '"expected_analysis_dimensions"' in prompt
+    assert '"jugadores_diferenciables"' in prompt
+    assert '"lesionados_sancionados_convocados"' in prompt
+    assert '"faltas_tarjetas"' in prompt
+    assert "tu respuesta debe ser exclusivamente\n        JSON valido" not in prompt
+    assert "tu respuesta debe ser exclusivamente\nJSON valido" in prompt
+    assert "marcadores comodos" in prompt
+    assert "del favorito" in prompt
+    assert "Usa `probability_profile` como baseline numerico" in prompt
     assert "forma real tras primera fase" in prompt
     assert "# PMundialera tournament state" in prompt
     assert "genera un plan de investigacion interno" in prompt

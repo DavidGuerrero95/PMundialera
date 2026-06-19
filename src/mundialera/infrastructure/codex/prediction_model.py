@@ -6,6 +6,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import textwrap
 from dataclasses import dataclass
 
 from mundialera.domain.models import Prediction, ResearchBrief, Scoreline
@@ -125,6 +126,25 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
             for item in brief.structured_evidence
         ],
         "uncertainty": brief.uncertainty,
+        "expected_analysis_dimensions": [
+            "equipos",
+            "torneo",
+            "jugadores",
+            "jugadores_diferenciables",
+            "arbitros",
+            "faltas_tarjetas",
+            "hinchada",
+            "sede_cancha_clima",
+            "titularidad",
+            "suplencia",
+            "lesionados_sancionados_convocados",
+            "buen_ritmo",
+            "mal_ritmo",
+            "buen_ataque",
+            "mal_ataque",
+            "buena_defensa",
+            "mala_defensa",
+        ],
     }
     if brief.calibration is not None:
         context["calibration"] = {
@@ -146,50 +166,126 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
             "expected_home_goals": brief.probability_profile.expected_home_goals,
             "expected_away_goals": brief.probability_profile.expected_away_goals,
         }
-    return (
-        "Eres Codex actuando como motor final de prediccion para una polla del Mundial.\n"
-        "Usa razonamiento riguroso con toda la evidencia entregada: actualidad deportiva, "
-        "alineaciones, lesionados, suplentes, tecnicos, tactica, sede, clima, cancha, "
-        "historial, ranking/ELO, cuotas, tabla, incentivos, emociones de mundial y sesgos.\n"
-        "Antes del marcador evalua brecha de clase, techo ofensivo, ritmo goleador del torneo, "
-        "probabilidad de empate, under/over, ambos anotan, porteros/atajadas, balon parado, "
-        "logistica, varianza de debut y sesgo de favorito.\n"
-        "Usa la memoria de estado del torneo si existe: forma real tras primera fase, goles a "
-        "favor/en contra, ataques calientes, defensas vulnerables, tendencia de partidos abiertos "
-        "o cerrados y si el equipo ya mostro BTTS/clean sheet.\n"
-        "Prioriza evidencia estructurada con mayor tier/confidence y degrada fuentes genericas, "
-        "duplicadas, viejas o contradictorias.\n"
-        "La seccion calibration es obligatoria: si draw_risk o favorite_bias_risk son altos, "
-        "no uses marcadores comodos del favorito sin justificar datos de calidad de tiro, "
-        "portero, balon parado y conversion.\n"
-        "Usa probability_profile como baseline numerico: primero decide 1X2/empate, "
-        "over/under, ambos anotan y goles esperados; despues deriva el marcador exacto.\n"
-        "No conviertas incertidumbre general en empate por defecto. Usa empate solo si hay "
-        "evidencia concreta de mercado de empate, perfil under, bloque bajo, porteros fuertes "
-        "o baja conversion. Si ranking/mercado/forma alinean a un favorito y hay techo ofensivo, "
-        "prefiere victoria por 1-2 goles aunque existan gaps secundarios.\n"
-        "El hedge no es empate automatico: usalo como segunda boleta de portafolio. "
-        "Si primary favorece a un equipo y over/BTTS estan altos, hedge debe preservar ganador "
-        "con otro total o margen. Usa empate como hedge solo cuando el empate compite de verdad "
-        "con el favorito o cuando BTTS/over extremo justifica un 2-2.\n"
-        "Si faltan fuentes externas, genera un plan de investigacion interno en rationale: "
-        "alineaciones, lesionados/sancionados, jugador diferencial, portero, mercado, clima/sede, "
-        "estado de grupo, senales de favorito, partido cerrado/abierto y "
-        "marcador-bucket probable.\n"
-        "No inventes hechos no soportados; si falta informacion, reflejalo en confidence.\n"
-        "Devuelve SOLO JSON valido, sin markdown, con este esquema exacto:\n"
-        "{"
-        '"primary":{"home":0,"away":0},'
-        '"hedge":{"home":0,"away":0},'
-        '"confidence":0.0,'
-        '"rationale":["razon 1","razon 2"],'
-        '"risk_flags":["riesgo 1"],'
-        '"evidence_gaps":["gap 1"]'
-        "}\n"
-        "Reglas: goles enteros entre 0 y 9; confidence entre 0 y 1; primary es el marcador "
-        "a guardar en GolPredictor; hedge es alternativa si se busca cubrir riesgo.\n"
-        f"MEMORIA_APRENDIZAJE:\n{learning_memory or 'Sin memoria aun.'}\n"
-        f"CONTEXTO_JSON:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
+    template = textwrap.dedent(
+        """
+        # Pronostico GolPredictor
+
+        ## Rol
+
+        Eres Codex actuando como motor final de prediccion para una polla del Mundial.
+        Debes producir un marcador exacto primario y un marcador hedge con razonamiento
+        probabilistico, calibrado y trazable.
+
+        ## Evidencia que debes evaluar
+
+        Usa razonamiento riguroso con toda la evidencia entregada:
+
+        - actualidad deportiva
+        - alineaciones, lesionados, sancionados, suplentes y tecnicos
+        - tactica, sistema, duelos, presion y balon parado
+        - sede, clima, cancha, viaje y logistica
+        - historial, ranking/ELO, cuotas, tabla e incentivos
+        - emociones de mundial, varianza de debut y sesgos de favorito
+        - porteros, atajadas, centrales, laterales y fragilidad defensiva
+        - under/over, ambos anotan, ritmo goleador y techo ofensivo
+
+        ## Dimensiones obligatorias de analisis
+
+        Antes de escoger marcador, revisa y refleja en `rationale` o `evidence_gaps`
+        el estado de estas dimensiones cuando existan en el contexto:
+
+        - equipos y estado del torneo
+        - jugadores, jugadores diferenciales, noticias personales/profesionales
+        - arbitros, faltas, tarjetas, penales y disciplina
+        - hinchada, localia, sede, estadio, cancha y clima
+        - titularidad, suplencia, rotaciones, convocados, lesionados y sancionados
+        - buen ritmo, mal ritmo, partido abierto o partido cerrado
+        - buen ataque, mal ataque, buena defensa y mala defensa
+        - porteros, centrales, laterales, balon parado y fragilidad defensiva
+
+        ## Memoria de torneo y aprendizaje
+
+        Usa la memoria de estado del torneo si existe:
+
+        - forma real tras primera fase
+        - goles a favor/en contra
+        - ataques calientes y defensas vulnerables
+        - tendencia de partidos abiertos o cerrados
+        - senales BTTS, clean sheet, favorito, empate y partido trabado
+
+        ```markdown
+        {learning_memory}
+        ```
+
+        ## Reglas de decision
+
+        - Prioriza evidencia estructurada con mayor `tier` y `confidence`.
+        - Degrada fuentes genericas, duplicadas, viejas o contradictorias.
+        - Usa `probability_profile` como baseline numerico antes del marcador exacto.
+        - Decide primero 1X2/empate, under/over, ambos anotan y goles esperados.
+        - No conviertas incertidumbre general en empate por defecto.
+        - Usa empate solo con evidencia concreta: mercado de empate, perfil under,
+          bloque bajo, porteros fuertes o baja conversion.
+        - Si ranking, mercado, forma y techo ofensivo alinean a un favorito,
+          prefiere victoria por 1-2 goles aunque existan gaps secundarios.
+        - Si `draw_risk` o `favorite_bias_risk` son altos, no uses marcadores comodos
+          del favorito sin justificar calidad de tiro, portero, balon parado y conversion.
+        - El hedge no es empate automatico: es una segunda boleta de portafolio.
+        - Si `primary` favorece a un equipo y over/BTTS estan altos, el hedge debe
+          preservar ganador con otro total o margen.
+        - Usa empate como hedge solo cuando compite de verdad con el favorito o cuando
+          BTTS/over extremo justifica un 2-2.
+        - No inventes hechos no soportados; si falta informacion, reflejalo en `confidence`.
+
+        ## Gaps de evidencia
+
+        Si faltan fuentes externas, genera un plan de investigacion interno en `rationale`
+        cubriendo:
+
+        - alineaciones
+        - lesionados/sancionados
+        - jugador diferencial
+        - portero
+        - mercado
+        - clima/sede
+        - estado de grupo
+        - senales de favorito
+        - partido cerrado/abierto
+        - marcador-bucket probable
+
+        ## Formato de salida obligatorio
+
+        Aunque este prompt esta escrito en Markdown, tu respuesta debe ser exclusivamente
+        JSON valido, sin Markdown, sin texto adicional y con este esquema exacto:
+
+        ```json
+        {{
+          "primary": {{"home": 0, "away": 0}},
+          "hedge": {{"home": 0, "away": 0}},
+          "confidence": 0.0,
+          "rationale": ["razon 1", "razon 2"],
+          "risk_flags": ["riesgo 1"],
+          "evidence_gaps": ["gap 1"]
+        }}
+        ```
+
+        Reglas de validacion:
+
+        - `home` y `away` deben ser goles enteros entre 0 y 9.
+        - `confidence` debe estar entre 0 y 1.
+        - `primary` es el marcador a guardar en GolPredictor.
+        - `hedge` es la alternativa si se busca cubrir riesgo.
+
+        ## Contexto JSON
+
+        ```json
+        {context_json}
+        ```
+        """
+    ).strip()
+    return template.format(
+        learning_memory=learning_memory or "Sin memoria aun.",
+        context_json=json.dumps(context, ensure_ascii=False, indent=2),
     )
 
 

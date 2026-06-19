@@ -4,11 +4,16 @@ from datetime import datetime
 from pathlib import Path
 
 from mundialera.domain.models import (
+    EvidenceCategory,
+    EvidenceItem,
     Match,
     Prediction,
+    PredictionCalibration,
     PredictionOutcome,
     ProbabilityProfile,
+    ResearchBrief,
     Scoreline,
+    SourceTier,
     SubmissionResult,
     Team,
 )
@@ -136,3 +141,89 @@ def test_prediction_prompt_memory_uses_sqlite_only(tmp_path: Path) -> None:
     assert "# sqlite learning" in memory
     assert "# sqlite state" in memory
     assert "legacy" not in memory
+
+
+def test_prediction_store_persists_match_research_dimensions(tmp_path: Path) -> None:
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
+    match = Match(
+        match_id="32",
+        kickoff=datetime.fromisoformat("2026-06-19T14:00:00-05:00"),
+        home=Team("Estados Unidos"),
+        away=Team("Australia"),
+        group="Mundial CoreX",
+    )
+    profile = ProbabilityProfile(
+        home_win=0.44,
+        draw=0.28,
+        away_win=0.28,
+        over_2_5=0.51,
+        both_teams_to_score=0.57,
+        expected_home_goals=1.45,
+        expected_away_goals=1.15,
+    )
+    brief = ResearchBrief(
+        match=match,
+        evidence=[
+            "hinchada local y estadio con clima pesado",
+            "jugador clave llega con buen ritmo y alto xG",
+        ],
+        structured_evidence=[
+            EvidenceItem(
+                category=EvidenceCategory.AVAILABILITY,
+                title="Titularidad y lesionados",
+                summary="Alineacion probable, suplente clave, convocado y lesion defensiva.",
+                url="https://example.test/availability",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.62,
+            ),
+            EvidenceItem(
+                category=EvidenceCategory.REFEREE_DISCIPLINE,
+                title="Arbitro y tarjetas",
+                summary="Arbitro con promedio alto de tarjetas, faltas y penales.",
+                url="https://example.test/referee",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.58,
+            ),
+            EvidenceItem(
+                category=EvidenceCategory.GOALKEEPERS_DEFENSE,
+                title="Buena defensa y mala defensa",
+                summary="Portero local fuerte; visitante concede por laterales.",
+                url="https://example.test/defense",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.64,
+            ),
+        ],
+        uncertainty=["mercado de empate sin confirmar"],
+        calibration=PredictionCalibration(
+            evidence_quality=0.55,
+            missing_categories=[EvidenceCategory.MARKET],
+            risk_flags=["Market signal is missing."],
+            draw_risk=0.32,
+            favorite_bias_risk=0.28,
+        ),
+        probability_profile=profile,
+    )
+
+    store.record_research_brief(brief)
+
+    loaded = store.load_research_records()[0]
+    assert loaded.match_id == "32"
+    assert loaded.home_team == "Estados Unidos"
+    assert loaded.away_team == "Australia"
+    assert loaded.probabilities == profile
+    assert loaded.calibration is not None
+    assert loaded.calibration.missing_categories == [EvidenceCategory.MARKET]
+    assert loaded.structured_evidence[0].category == EvidenceCategory.AVAILABILITY
+    assert loaded.analysis_dimensions["hinchada"]
+    assert loaded.analysis_dimensions["titularidad"]
+    assert loaded.analysis_dimensions["lesionados_sancionados_convocados"]
+    assert loaded.analysis_dimensions["arbitros"]
+    assert loaded.analysis_dimensions["faltas_tarjetas"]
+    assert loaded.analysis_dimensions["buen_ritmo"]
+    assert loaded.analysis_dimensions["buen_ataque"]
+    assert loaded.analysis_dimensions["buena_defensa"]
+    assert loaded.analysis_dimensions["mala_defensa"]
+    assert "market" in loaded.analysis_dimensions["gaps_evidencia"]
