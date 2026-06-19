@@ -3,6 +3,11 @@ from __future__ import annotations
 import hashlib
 from dataclasses import replace
 
+from mundialera.application.score_distribution import (
+    best_scoreline_by_expected_points,
+    coherent_profile_from_expected_goals,
+    hedge_scoreline_by_expected_points,
+)
 from mundialera.domain.models import ProbabilityProfile, ResearchBrief, Scoreline
 
 OVER_TERMS = (
@@ -143,12 +148,6 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
         diff -= 0.22
     diff *= 1.0 - (favorite_bias * 0.16)
 
-    draw = _clamp(0.22 + draw_risk * 0.15 - quality * 0.04 - abs(diff) * 0.18, 0.17, 0.34)
-    directional_mass = 1.0 - draw
-    home_share = _clamp(0.5 + diff, 0.18, 0.82)
-    home_win = directional_mass * home_share
-    away_win = directional_mass - home_win
-
     over_hits = _term_hits(corpus, OVER_TERMS)
     under_hits = _term_hits(corpus, UNDER_TERMS)
     total_goals = _clamp(
@@ -163,49 +162,14 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
     )
     expected_home = _clamp(total_goals / 2 + diff * 1.35, 0.25, 3.5)
     expected_away = _clamp(total_goals - expected_home, 0.25, 3.5)
-    over_25 = _clamp(
-        0.42 + (total_goals - 2.35) * 0.16 + over_hits * 0.05 - under_hits * 0.06,
-        0.18,
-        0.72,
-    )
-    both_score = _clamp(
-        0.49 - abs(diff) * 0.18 + over_hits * 0.04 - under_hits * 0.03,
-        0.22,
-        0.68,
-    )
-
-    return ProbabilityProfile(
-        home_win=round(home_win, 2),
-        draw=round(draw, 2),
-        away_win=round(away_win, 2),
-        over_2_5=round(over_25, 2),
-        both_teams_to_score=round(both_score, 2),
-        expected_home_goals=round(expected_home, 2),
-        expected_away_goals=round(expected_away, 2),
+    return coherent_profile_from_expected_goals(
+        round(expected_home, 2),
+        round(expected_away, 2),
     )
 
 
 def scoreline_from_profile(profile: ProbabilityProfile) -> Scoreline:
-    if profile.draw >= max(profile.home_win, profile.away_win) + 0.03:
-        goals = 1 if profile.expected_home_goals + profile.expected_away_goals >= 1.55 else 0
-        return Scoreline(goals, goals)
-
-    home = _goal_count(profile.expected_home_goals)
-    away = _goal_count(profile.expected_away_goals)
-    if profile.home_win > profile.away_win and home <= away:
-        home = away + 1
-    if profile.away_win > profile.home_win and away <= home:
-        away = home + 1
-    if abs(home - away) > 2:
-        if home > away:
-            home = away + 2
-        else:
-            away = home + 2
-    if profile.home_win >= 0.48 and home - away < 1:
-        home = away + 1
-    if profile.away_win >= 0.48 and away - home < 1:
-        away = home + 1
-    return Scoreline(home, away)
+    return best_scoreline_by_expected_points(profile)
 
 
 def draw_hedge_from_profile(profile: ProbabilityProfile, primary: Scoreline) -> Scoreline:
@@ -223,28 +187,7 @@ def draw_hedge_from_profile(profile: ProbabilityProfile, primary: Scoreline) -> 
 
 
 def portfolio_hedge_from_profile(profile: ProbabilityProfile, primary: Scoreline) -> Scoreline:
-    if primary.home == primary.away:
-        return _favorite_breaks_draw(profile, primary)
-
-    favorite_probability = max(profile.home_win, profile.away_win)
-    total_goals = profile.expected_home_goals + profile.expected_away_goals
-    high_btts_draw_cover = (
-        favorite_probability >= 0.46
-        and profile.draw >= 0.29
-        and profile.both_teams_to_score >= 0.60
-        and profile.over_2_5 >= 0.58
-    )
-    if high_btts_draw_cover:
-        goals = 2 if total_goals >= 2.75 else 1
-        return Scoreline(goals, goals)
-
-    if profile.over_2_5 >= 0.55 and profile.both_teams_to_score >= 0.52:
-        return _expand_winning_margin(primary)
-
-    if profile.over_2_5 <= 0.45 or profile.both_teams_to_score <= 0.45:
-        return _lower_total_same_winner(primary)
-
-    return _nudge_winner_same_margin(primary)
+    return hedge_scoreline_by_expected_points(profile, primary)
 
 
 def _base_team_diff(brief: ResearchBrief) -> float:
@@ -253,44 +196,10 @@ def _base_team_diff(brief: ResearchBrief) -> float:
     return ((digest[0] / 255) - (digest[1] / 255)) * 0.22
 
 
-def _favorite_breaks_draw(profile: ProbabilityProfile, primary: Scoreline) -> Scoreline:
-    if profile.home_win >= profile.away_win:
-        return Scoreline(primary.home + 1, primary.away)
-    return Scoreline(primary.home, primary.away + 1)
-
-
-def _expand_winning_margin(primary: Scoreline) -> Scoreline:
-    if primary.home > primary.away:
-        return Scoreline(home=min(5, primary.home + 1), away=primary.away)
-    return Scoreline(home=primary.home, away=min(5, primary.away + 1))
-
-
-def _lower_total_same_winner(primary: Scoreline) -> Scoreline:
-    if primary.home > primary.away:
-        return Scoreline(home=max(1, primary.home - 1), away=0)
-    return Scoreline(home=0, away=max(1, primary.away - 1))
-
-
-def _nudge_winner_same_margin(primary: Scoreline) -> Scoreline:
-    if primary.home > primary.away:
-        return Scoreline(home=primary.home, away=max(0, primary.away - 1))
-    return Scoreline(home=max(0, primary.home - 1), away=primary.away)
-
-
 def _class_gap_diff(brief: ResearchBrief) -> float:
     home = TEAM_STRENGTH_PRIORS.get(brief.match.home.name.casefold(), 0.50)
     away = TEAM_STRENGTH_PRIORS.get(brief.match.away.name.casefold(), 0.50)
     return (home - away) * 0.55
-
-
-def _goal_count(expected_goals: float) -> int:
-    if expected_goals < 0.65:
-        return 0
-    if expected_goals < 1.45:
-        return 1
-    if expected_goals < 2.25:
-        return 2
-    return 3
 
 
 def _corpus(brief: ResearchBrief) -> str:

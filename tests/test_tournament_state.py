@@ -47,6 +47,8 @@ def test_tournament_memory_agent_filters_match_relevant_state() -> None:
             "- Average goals: 3.25",
             "- Draw rate: 22.0%",
             "- Open match rate (3+ goals): 68.0%",
+            "- Hot attacks: Canadá, Francia",
+            "- Leaky defenses: Catar, Francia",
             "- Canadá: P1 W1 D0 L0, GF 6, GA 0, open_profile 100.0%",
             "- Catar: P1 W0 D0 L1, GF 0, GA 6, open_profile 100.0%",
             "- Francia: P1 W1 D0 L0, GF 3, GA 1, open_profile 100.0%",
@@ -60,3 +62,5 @@ def test_tournament_memory_agent_filters_match_relevant_state() -> None:
     assert "Canadá" in brief.evidence[0]
     assert "Catar" in brief.evidence[0]
     assert "Francia" not in brief.evidence[0]
+    assert "Hot attacks" not in brief.evidence[0]
+    assert "Leaky defenses" not in brief.evidence[0]

@@ -259,6 +259,9 @@ def test_prediction_store_persists_match_research_dimensions(tmp_path: Path) -> 
     assert loaded.home_team == "Estados Unidos"
     assert loaded.away_team == "Australia"
     assert loaded.probabilities == profile
+    assert loaded.scoreline_distribution
+    assert loaded.expected_points_candidates
+    assert loaded.expected_points_candidates[0]["expected_pool_points"] > 0
     assert loaded.calibration is not None
     assert loaded.calibration.missing_categories == [EvidenceCategory.MARKET]
     assert loaded.structured_evidence[0].category == EvidenceCategory.AVAILABILITY

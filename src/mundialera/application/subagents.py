@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 
 from mundialera.application.calibration import calibrate_research_brief
@@ -10,7 +9,8 @@ from mundialera.application.probability import (
     portfolio_hedge_from_profile,
     scoreline_from_profile,
 )
-from mundialera.domain.models import EvidenceItem, Match, Prediction, ResearchBrief, Scoreline
+from mundialera.application.score_distribution import result_probability
+from mundialera.domain.models import EvidenceItem, Match, Prediction, ResearchBrief
 from mundialera.domain.ports import PredictionModel, ResearchAgent
 
 
@@ -59,25 +59,10 @@ class HeuristicPredictionModel(PredictionModel):
 
     def predict(self, brief: ResearchBrief) -> Prediction:
         match = brief.match
-        seed = f"{match.home.name}|{match.away.name}".encode()
-        digest = hashlib.sha256(seed).digest()
         profile = brief.probability_profile or build_probability_profile(brief)
-
-        home_strength = digest[0] % 4
-        away_strength = digest[1] % 4
-        home = max(0, min(4, 1 + home_strength - (away_strength // 2)))
-        away = max(0, min(4, 1 + away_strength - (home_strength // 2)))
-
-        if match.prediction is not None:
-            home = round((home + match.prediction.home) / 2)
-            away = round((away + match.prediction.away) / 2)
-
-        baseline = Scoreline(home=home, away=away)
-        profile_score = scoreline_from_profile(profile)
-        primary = _blend_scoreline(baseline, profile_score)
+        primary = scoreline_from_profile(profile)
         hedge = portfolio_hedge_from_profile(profile, primary)
-        uncertainty_penalty = min(0.25, len(brief.uncertainty) * 0.02)
-        evidence_bonus = min(0.12, len(brief.evidence) * 0.005)
+        confidence = result_probability(profile, primary)
         calibration_penalty = 0.0
         if brief.calibration is not None:
             calibration_penalty = min(
@@ -92,12 +77,12 @@ class HeuristicPredictionModel(PredictionModel):
                 and abs(primary.home - primary.away) <= 1
             ):
                 hedge = portfolio_hedge_from_profile(profile, primary)
-        confidence = max(
-            0.35,
-            min(0.82, 0.62 + evidence_bonus - uncertainty_penalty - calibration_penalty),
-        )
+        confidence = max(0.20, min(0.85, confidence - calibration_penalty))
         rationale = [
-            "Base heuristica deterministica calibrada por equipos y pronostico previo.",
+            (
+                "Base heuristica deterministica por matriz de marcadores y puntos "
+                "esperados GolPredictor."
+            ),
             (
                 "Perfil probabilistico: "
                 f"home={profile.home_win:.2f}, draw={profile.draw:.2f}, "
@@ -125,24 +110,6 @@ class HeuristicPredictionModel(PredictionModel):
             rationale=rationale,
             probabilities=profile,
         )
-
-    @staticmethod
-    def _hedge(primary: Scoreline) -> Scoreline:
-        if primary.home == primary.away:
-            return Scoreline(home=primary.home + 1, away=primary.away)
-        if primary.home > primary.away:
-            return Scoreline(home=primary.home, away=max(0, primary.away + 1))
-        return Scoreline(home=max(0, primary.home + 1), away=primary.away)
-
-
-def _blend_scoreline(baseline: Scoreline, profile_score: Scoreline) -> Scoreline:
-    home = round((baseline.home + profile_score.home) / 2)
-    away = round((baseline.away + profile_score.away) / 2)
-    if baseline.home != baseline.away and profile_score.home == profile_score.away:
-        home = profile_score.home
-        away = profile_score.away
-    return Scoreline(home=home, away=away)
-
 
 def default_prompt_research_agents() -> list[ResearchAgent]:
     return [

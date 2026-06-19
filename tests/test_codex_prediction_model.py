@@ -130,6 +130,13 @@ def test_codex_prompt_includes_calibration_payload() -> None:
 
     assert '"calibration"' in prompt
     assert '"probability_profile"' in prompt
+    assert '"scoreline_distribution"' in prompt
+    assert '"expected_points_candidates"' in prompt
+    assert '"optimized_scorelines"' in prompt
+    assert '"pool_scoring"' in prompt
+    assert '"coverage"' in prompt
+    assert '"facts"' in prompt
+    assert '"id": "E01"' in prompt
     assert '"draw_risk": 0.58' in prompt
     assert '"expected_home_goals": 1.05' in prompt
     assert prompt.startswith("# Pronostico GolPredictor")
@@ -158,10 +165,12 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert "tu respuesta debe ser exclusivamente\nJSON valido" in prompt
     assert "marcadores comodos" in prompt
     assert "del favorito" in prompt
-    assert "Usa `probability_profile` como baseline numerico" in prompt
-    assert "forma real tras primera fase" in prompt
+    assert "Usa `scoreline_distribution` como unica matriz coherente" in prompt
+    assert "expected_points_candidates" in prompt
+    assert "maximiza los puntos" in prompt
+    assert "estado de los dos equipos del partido" in prompt
     assert "# PMundialera tournament state" in prompt
-    assert "genera un plan de investigacion interno" in prompt
+    assert "No metas errores tecnicos ni tareas de investigacion como evidencia" in prompt
 
 
 def test_codex_prompt_uses_match_scoped_star_player_memory() -> None:
@@ -189,9 +198,72 @@ def test_codex_prompt_uses_match_scoped_star_player_memory() -> None:
     )
 
     assert "Pulisic and Balogun" in prompt
-    assert "unrelated player context" in prompt
+    assert "unrelated player context" not in prompt
     assert '"star_player_signals": [\n    "Pulisic and Balogun' in prompt
     assert '"lineup_signals": [\n    "Probable XI includes' in prompt
     assert '"availability_signals": [\n    "One defender is suspended' in prompt
     assert '"player_discipline_signals": [\n    "Midfielder has yellow-card' in prompt
     assert '"rhythm_signals": [\n    "Team arrives with high rhythm' in prompt
+
+
+def test_codex_prompt_filters_generic_metric_pages_from_player_signals() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("A"), away=Team("B"))
+    brief = ResearchBrief(
+        match=match,
+        evidence=["plantilla: evaluar lesiones, sanciones, titulares y suplentes"],
+        uncertainty=["plantilla: requiere investigacion web antes de envio real."],
+        structured_evidence=[
+            EvidenceItem(
+                category=EvidenceCategory.RECENT_MATCH_STATS,
+                title="Expected Goals (xG) - estadísticas para equipos",
+                summary="Página genérica que explica xG y estadísticas de córners.",
+                url="https://footystats.org/es/stats/xg",
+                source="footystats",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.40,
+            )
+        ],
+    )
+
+    prompt = _build_prediction_prompt(brief, learning_memory="")
+
+    assert '"star_player_signals": []' in prompt
+    assert '"lineup_signals": []' in prompt
+    assert '"availability_signals": []' in prompt
+    assert "plantilla: evaluar" not in prompt
+    assert "plantilla: requiere investigacion" not in prompt
+
+
+def test_codex_prompt_strips_global_team_lists_from_tournament_memory() -> None:
+    match = Match(
+        match_id="32",
+        kickoff=None,
+        home=Team("Estados Unidos"),
+        away=Team("Australia"),
+    )
+    brief = ResearchBrief(match=match, evidence=[], uncertainty=[])
+
+    prompt = _build_prediction_prompt(
+        brief,
+        learning_memory=(
+            "# PMundialera tournament state\n"
+            "\n"
+            "## Tournament tempo\n"
+            "- Average goals: 3.18\n"
+            "- Draw rate: 35.7%\n"
+            "- Hot attacks: Alemania, Estados Unidos, Francia\n"
+            "- Leaky defenses: Paraguay, Turquía, Japón\n"
+            "\n"
+            "## Team state\n"
+            "- Estados Unidos: P1 W1 D0 L0, GF 4, GA 1\n"
+            "- Australia: P1 W1 D0 L0, GF 2, GA 0\n"
+            "- Francia: P1 W1 D0 L0, GF 3, GA 1\n"
+        ),
+    )
+
+    assert "Average goals: 3.18" in prompt
+    assert "Estados Unidos: P1" in prompt
+    assert "Australia: P1" in prompt
+    assert "Hot attacks" not in prompt
+    assert "Leaky defenses" not in prompt
+    assert "Francia: P1" not in prompt

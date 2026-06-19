@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from mundialera.application.clock import SystemClock
@@ -134,15 +135,43 @@ def _usable_research_signal(value: str) -> bool:
         "page-scrape: fallo",
         "connecterror",
         "httpstatuserror",
+        ": evaluar ",
+        "requiere investigacion",
+        "requiere investigación",
+        "antes de envio real",
+        "antes de envío real",
+        "que es xg",
+        "qué es xg",
+        "expected goals (xg)",
+        "estadisticas xg para equipos",
+        "estadísticas xg para equipos",
+        "estadisticas de corners",
+        "estadísticas de córners",
+        "corner-stats",
+        "/stats/xg",
+        "footystats",
     )
     return not any(marker in normalized for marker in negative_markers)
 
 
 def _compact_memory_line(value: str, *, limit: int = 1000) -> str:
-    line = " ".join(value.split())
+    line = _sanitize_context_text(" ".join(value.split()))
     if len(line) <= limit:
         return line
     return f"{line[: limit - 3]}..."
+
+
+def _sanitize_context_text(value: str) -> str:
+    without_hot = re.sub(
+        r"\s*-\s*Hot attacks:.*?(?=\s*-\s*(?:Leaky defenses:|[A-ZÁÉÍÓÚÑ][^:]{1,80}:)|$)",
+        "",
+        value,
+    )
+    return re.sub(
+        r"\s*-\s*Leaky defenses:.*?(?=\s*-\s*[A-ZÁÉÍÓÚÑ][^:]{1,80}:|$)",
+        "",
+        without_hot,
+    ).strip()
 
 
 def build_orchestrator(settings: Settings | None = None) -> PredictionOrchestrator:

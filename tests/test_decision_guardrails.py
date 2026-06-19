@@ -53,7 +53,7 @@ def test_guardrails_cap_confidence_and_reduce_unsupported_favorite_margin() -> N
     assert guarded.probabilities is not None
 
 
-def test_guardrails_add_draw_hedge_when_draw_risk_is_high() -> None:
+def test_guardrails_do_not_force_draw_hedge_from_general_uncertainty() -> None:
     match = Match(match_id="1", kickoff=None, home=Team("A"), away=Team("B"))
     brief = enrich_probability_profile(
         calibrate_research_brief(
@@ -83,8 +83,8 @@ def test_guardrails_add_draw_hedge_when_draw_risk_is_high() -> None:
 
     guarded = apply_prediction_guardrails(prediction, brief)
 
-    assert guarded.hedge.home == guarded.hedge.away
-    assert "draw-risk-covered-in-hedge" in guarded.decision_flags
+    assert guarded.hedge == Scoreline(3, 1)
+    assert "draw-risk-covered-in-hedge" not in guarded.decision_flags
 
 
 def test_guardrails_replace_default_draw_hedge_when_over_profile_favors_winner() -> None:
@@ -116,5 +116,5 @@ def test_guardrails_replace_default_draw_hedge_when_over_profile_favors_winner()
 
     guarded = apply_prediction_guardrails(prediction, brief)
 
-    assert guarded.hedge == Scoreline(3, 1)
+    assert guarded.hedge == Scoreline(1, 0)
     assert "hedge-rebalanced-away-from-default-draw" in guarded.decision_flags

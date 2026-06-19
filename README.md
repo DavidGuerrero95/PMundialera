@@ -1,23 +1,23 @@
-﻿# PMundialera
+# PMundialera
 
-Agente Python para investigar partidos, generar pronÃ³sticos y operar grupos de
+Agente Python para investigar partidos, generar pronósticos y operar grupos de
 GolPredictor con una arquitectura hexagonal y herramientas MCP.
 
 ## Estado
 
 Primera base funcional:
 
-- Cliente GolPredictor con login ASP.NET WebForms, scraping de tablas y envÃ­o
+- Cliente GolPredictor con login ASP.NET WebForms, scraping de tablas y envío
   controlado.
 - Subagentes especializados para forma deportiva, plantillas, contexto,
-  condiciones del partido y calibraciÃ³n de marcador.
-- Orquestador que produce dos pronÃ³sticos por partido.
+  condiciones del partido y calibración de marcador.
+- Orquestador que produce dos pronósticos por partido.
 - CLI auditable con `dry-run` por defecto.
-- Servidor MCP con herramientas para inspecciÃ³n, predicciÃ³n y envÃ­o.
-- Reglas canÃ³nicas en `memory/` y adaptadores delgados en `.codex/`, `.cursor/`
+- Servidor MCP con herramientas para inspección, predicción y envío.
+- Reglas canónicas en `memory/` y adaptadores delgados en `.codex/`, `.cursor/`
   y `.agents/`.
 
-## InstalaciÃ³n local
+## Instalación local
 
 ```powershell
 python -m venv .venv
@@ -181,10 +181,10 @@ Herramientas expuestas:
 
 ## Seguridad
 
-No se versionan credenciales. El envÃ­o a GolPredictor exige credenciales por
-variables de entorno y usa `dry-run` salvo que se pida explÃ­citamente `--submit`.
+No se versionan credenciales. El envío a GolPredictor exige credenciales por
+variables de entorno y usa `dry-run` salvo que se pida explícitamente `--submit`.
 
-## InvestigaciÃ³n
+## Investigación
 
 El flujo real puede activar busqueda web con DuckDuckGo HTML para recolectar
 titulares/snippets recientes por partido y, cuando la pagina es HTML accesible,
@@ -211,16 +211,33 @@ LLM, pero la respuesta exigida sigue siendo JSON puro.
 El prompt incluye:
 
 - partido, grupo, kickoff y pronostico actual
-- evidencia web
+- evidencia web deduplicada y hechos estructurados con ids
 - historico visible en GolPredictor
-- incertidumbres de los subagentes
+- cobertura faltante compacta, sin errores tecnicos como evidencia futbolistica
 - dimensiones obligatorias: equipos, torneo, jugadores, jugadores diferenciales,
   jugadores estrella/desequilibrantes, arbitros, faltas/tarjetas, hinchada,
   sede/cancha/clima, titularidad, suplencia, lesionados/sancionados/convocados,
   ritmo, ataque y defensa
-- perfil probabilistico 1X2, over/under, ambos anotan y goles esperados
+- `scoreline_distribution`, perfil probabilistico derivado de esa matriz,
+  candidatos por puntos esperados GolPredictor y marcador optimizado
 - calibracion de evidencia, empate y sesgo de favorito
+- memoria de torneo recortada al partido, el grupo cuando este mapeado y un prior
+  global compacto; no se inyecta estado detallado de selecciones ajenas
 - reglas de salida JSON
+
+La seleccion final del marcador no depende solo del texto del LLM. Cuando existe
+perfil probabilistico, el sistema calcula una matriz de marcadores y maximiza:
+
+```text
+EP(h,a) = 5 * P(misma clase 1X2)
+        + 2 * P(goles local = h)
+        + 2 * P(goles visitante = a)
+        + 1 * P(diferencia = h-a)
+```
+
+En eliminatorias los pesos se duplican. El `primary` guardado es el marcador con
+mayor punto esperado, no necesariamente el marcador exacto modal; `hedge` cubre
+una incertidumbre real con EP competitivo.
 
 Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 
@@ -253,8 +270,10 @@ Antes de guardar o enviar, el orquestador aplica guardrails de decision:
 - limita la confianza cuando la evidencia es baja o faltan categorias criticas
 - reduce marcadores comodos de favorito si no hay soporte de portero, estadistica reciente,
   balon parado y conversion
-- cubre empate en el hedge cuando el riesgo de empate es alto
-- persiste perfil probabilistico y flags de decision en el historico local
+- cubre empate en el hedge solo cuando compite con el favorito y no por
+  incertidumbre generica
+- persiste perfil probabilistico, matriz de marcadores, candidatos EP y flags de
+  decision en el historico local
 
 Subagentes actuales:
 
@@ -286,7 +305,7 @@ prompt tambien guarda campos dedicados: `team_state_signals`, `lineup_signals`,
 `bench_rotation_signals`, `availability_signals`, `player_discipline_signals` y
 `rhythm_signals`.
 
-## ValidaciÃ³n
+## Validación
 
 ```powershell
 ruff check .

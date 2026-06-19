@@ -215,6 +215,8 @@ class ResearchRecord:
     uncertainty: list[str]
     calibration: PredictionCalibration | None = None
     probabilities: ProbabilityProfile | None = None
+    scoreline_distribution: list[dict[str, float | int]] = field(default_factory=list)
+    expected_points_candidates: list[dict[str, float | int]] = field(default_factory=list)
     analysis_dimensions: dict[str, list[str]] = field(default_factory=dict)
     star_player_signals: list[str] = field(default_factory=list)
     team_state_signals: list[str] = field(default_factory=list)

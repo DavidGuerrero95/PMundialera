@@ -50,6 +50,8 @@ def _relevant_lines(memory: str, match: Match) -> list[str]:
         lowered = stripped.casefold()
         if not stripped.startswith("-"):
             continue
+        if "hot attacks:" in lowered or "leaky defenses:" in lowered:
+            continue
         if (
             "average goals" in lowered
             or "draw rate" in lowered

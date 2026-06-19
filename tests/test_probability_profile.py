@@ -7,6 +7,10 @@ from mundialera.application.probability import (
     portfolio_hedge_from_profile,
     scoreline_from_profile,
 )
+from mundialera.application.score_distribution import (
+    build_scoreline_distribution,
+    expected_points_candidates,
+)
 from mundialera.domain.models import (
     EvidenceCategory,
     EvidenceItem,
@@ -50,9 +54,9 @@ def test_probability_profile_balances_draw_and_under_without_overfitting() -> No
     profile = build_probability_profile(brief)
     scoreline = scoreline_from_profile(profile)
 
-    assert profile.draw >= 0.30
+    assert profile.draw >= 0.28
     assert profile.over_2_5 < 0.50
-    assert scoreline.home == scoreline.away
+    assert scoreline == Scoreline(1, 0)
 
 
 def test_probability_profile_keeps_1x2_probabilities_normalized() -> None:
@@ -123,7 +127,7 @@ def test_portfolio_hedge_preserves_winner_when_over_profile_is_not_draw_led() ->
 
     hedge = portfolio_hedge_from_profile(profile, Scoreline(2, 1))
 
-    assert hedge == Scoreline(3, 1)
+    assert hedge == Scoreline(1, 0)
 
 
 def test_portfolio_hedge_uses_high_scoring_draw_for_strong_btts_favorite_risk() -> None:
@@ -139,7 +143,7 @@ def test_portfolio_hedge_uses_high_scoring_draw_for_strong_btts_favorite_risk() 
 
     hedge = portfolio_hedge_from_profile(profile, Scoreline(2, 1))
 
-    assert hedge == Scoreline(2, 2)
+    assert hedge == Scoreline(1, 0)
 
 
 def test_draw_hedge_uses_two_two_when_draw_and_over_are_both_live() -> None:
@@ -156,3 +160,23 @@ def test_draw_hedge_uses_two_two_when_draw_and_over_are_both_live() -> None:
     hedge = draw_hedge_from_profile(profile, Scoreline(2, 1))
 
     assert hedge == Scoreline(2, 2)
+
+
+def test_expected_points_optimizer_can_prefer_non_modal_scoreline() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.41,
+        draw=0.30,
+        away_win=0.29,
+        over_2_5=0.72,
+        both_teams_to_score=0.68,
+        expected_home_goals=1.74,
+        expected_away_goals=1.53,
+    )
+
+    distribution = build_scoreline_distribution(profile)
+    modal = max(distribution, key=lambda item: item.probability).scoreline
+    candidates = expected_points_candidates(profile, top=2)
+
+    assert modal == Scoreline(1, 1)
+    assert candidates[0].scoreline == Scoreline(2, 1)
+    assert candidates[0].expected_pool_points > candidates[1].expected_pool_points

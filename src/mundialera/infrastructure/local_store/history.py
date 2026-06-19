@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from mundialera.application.score_distribution import (
+    expected_points_payload,
+    scoreline_distribution_payload,
+)
 from mundialera.domain.models import (
     EvidenceCategory,
     EvidenceItem,
@@ -23,7 +28,7 @@ from mundialera.domain.models import (
 )
 from mundialera.domain.ports import PredictionHistory, PredictionRecorder, ResearchRecorder
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 ANALYSIS_DIMENSION_TERMS: dict[str, tuple[str, ...]] = {
@@ -217,6 +222,16 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
             uncertainty=brief.uncertainty,
             calibration=brief.calibration,
             probabilities=brief.probability_profile,
+            scoreline_distribution=(
+                scoreline_distribution_payload(brief.probability_profile)
+                if brief.probability_profile is not None
+                else []
+            ),
+            expected_points_candidates=(
+                expected_points_payload(brief.probability_profile)
+                if brief.probability_profile is not None
+                else []
+            ),
             analysis_dimensions=_analysis_dimensions_from_brief(brief),
             star_player_signals=_star_player_signals_from_brief(brief),
             team_state_signals=_signals_from_brief(
@@ -227,11 +242,13 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                     EvidenceCategory.RECENT_MATCH_STATS,
                 },
                 terms=SIGNAL_TERMS["team_state"],
+                include_unstructured=False,
             ),
             lineup_signals=_signals_from_brief(
                 brief,
                 categories={EvidenceCategory.AVAILABILITY, EvidenceCategory.TACTICS},
                 terms=SIGNAL_TERMS["lineup"],
+                include_unstructured=False,
             ),
             bench_rotation_signals=_signals_from_brief(
                 brief,
@@ -241,16 +258,19 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                     EvidenceCategory.REST_TRAVEL,
                 },
                 terms=SIGNAL_TERMS["bench_rotation"],
+                include_unstructured=False,
             ),
             availability_signals=_signals_from_brief(
                 brief,
                 categories={EvidenceCategory.AVAILABILITY, EvidenceCategory.NEWS},
                 terms=SIGNAL_TERMS["availability"],
+                include_unstructured=False,
             ),
             player_discipline_signals=_signals_from_brief(
                 brief,
                 categories={EvidenceCategory.REFEREE_DISCIPLINE, EvidenceCategory.AVAILABILITY},
                 terms=SIGNAL_TERMS["player_discipline"],
+                include_unstructured=False,
             ),
             rhythm_signals=_signals_from_brief(
                 brief,
@@ -261,6 +281,7 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                     EvidenceCategory.TACTICS,
                 },
                 terms=SIGNAL_TERMS["rhythm"],
+                include_unstructured=False,
             ),
         )
         with self._connect() as connection:
@@ -308,6 +329,7 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 SELECT record_id, created_at, group_name, match_id, match_label, kickoff,
                        home_team, away_team, evidence_json, structured_evidence_json,
                        uncertainty_json, calibration_json, probabilities_json,
+                       scoreline_distribution_json, expected_points_candidates_json,
                        analysis_dimensions_json, star_player_signals_json,
                        team_state_signals_json, lineup_signals_json,
                        bench_rotation_signals_json, availability_signals_json,
@@ -414,6 +436,8 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 uncertainty_json TEXT NOT NULL,
                 calibration_json TEXT,
                 probabilities_json TEXT,
+                scoreline_distribution_json TEXT NOT NULL DEFAULT '[]',
+                expected_points_candidates_json TEXT NOT NULL DEFAULT '[]',
                 analysis_dimensions_json TEXT NOT NULL,
                 star_player_signals_json TEXT NOT NULL DEFAULT '[]',
                 team_state_signals_json TEXT NOT NULL DEFAULT '[]',
@@ -432,6 +456,7 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
         )
         _ensure_match_research_star_player_column(connection)
         _ensure_match_research_signal_columns(connection)
+        _ensure_match_research_distribution_columns(connection)
         self._write_metadata("schema_version", str(SCHEMA_VERSION), connection=connection)
 
     def _insert_prediction(
@@ -517,12 +542,13 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 record_id, created_at, group_name, match_id, match_label, kickoff,
                 home_team, away_team, evidence_json, structured_evidence_json,
                 uncertainty_json, calibration_json, probabilities_json,
+                scoreline_distribution_json, expected_points_candidates_json,
                 analysis_dimensions_json, star_player_signals_json,
                 team_state_signals_json, lineup_signals_json,
                 bench_rotation_signals_json, availability_signals_json,
                 player_discipline_signals_json, rhythm_signals_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.record_id,
@@ -538,6 +564,8 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 json.dumps(record.uncertainty, ensure_ascii=False),
                 _calibration_to_json(record.calibration),
                 _probabilities_to_json(record.probabilities),
+                json.dumps(record.scoreline_distribution, ensure_ascii=False, sort_keys=True),
+                json.dumps(record.expected_points_candidates, ensure_ascii=False, sort_keys=True),
                 json.dumps(record.analysis_dimensions, ensure_ascii=False, sort_keys=True),
                 json.dumps(record.star_player_signals, ensure_ascii=False),
                 json.dumps(record.team_state_signals, ensure_ascii=False),
@@ -646,6 +674,8 @@ def _research_record_from_row(row: sqlite3.Row) -> ResearchRecord:
         uncertainty=_json_string_list(row["uncertainty_json"]),
         calibration=_calibration_from_json(row["calibration_json"]),
         probabilities=_probabilities_from_json(row["probabilities_json"]),
+        scoreline_distribution=_json_dict_list(row["scoreline_distribution_json"]),
+        expected_points_candidates=_json_dict_list(row["expected_points_candidates_json"]),
         analysis_dimensions=_analysis_dimensions_from_json(row["analysis_dimensions_json"]),
         star_player_signals=_json_string_list(row["star_player_signals_json"]),
         team_state_signals=_json_string_list(row["team_state_signals_json"]),
@@ -790,6 +820,23 @@ def _json_list(value: object) -> list[object]:
     return []
 
 
+def _json_dict_list(value: object) -> list[dict[str, float | int]]:
+    parsed = _json_list(value)
+    records: list[dict[str, float | int]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        record: dict[str, float | int] = {}
+        for key, raw_value in item.items():
+            if isinstance(raw_value, bool):
+                continue
+            if isinstance(raw_value, int | float):
+                record[str(key)] = raw_value
+        if record:
+            records.append(record)
+    return records
+
+
 def _analysis_dimensions_from_brief(brief: ResearchBrief) -> dict[str, list[str]]:
     corpus_items = [
         *brief.evidence,
@@ -846,20 +893,24 @@ def _star_player_signals_from_brief(brief: ResearchBrief) -> list[str]:
         EvidenceCategory.TACTICS,
         EvidenceCategory.MARKET,
         EvidenceCategory.NEWS,
-        EvidenceCategory.RECENT_MATCH_STATS,
     }
     signals: list[str] = []
     seen: set[str] = set()
 
     def add_signal(value: str) -> None:
         normalized_value = value.strip()
-        if not normalized_value or normalized_value in seen or len(signals) >= 8:
+        if (
+            not normalized_value
+            or normalized_value in seen
+            or len(signals) >= 8
+            or _is_unusable_research_signal(normalized_value)
+        ):
             return
         signals.append(normalized_value)
         seen.add(normalized_value)
 
     for item in brief.structured_evidence:
-        text = f"{item.category.value}: {item.title}. {item.summary}"
+        text = _sanitize_context_text(f"{item.category.value}: {item.title}. {item.summary}")
         normalized = text.casefold()
         if item.category == EvidenceCategory.PLAYER_CONTEXT or (
             item.category in player_signal_categories
@@ -868,6 +919,7 @@ def _star_player_signals_from_brief(brief: ResearchBrief) -> list[str]:
             add_signal(text)
 
     for raw_signal in brief.evidence:
+        raw_signal = _sanitize_context_text(raw_signal)
         normalized = raw_signal.casefold()
         if any(term in normalized for term in terms):
             add_signal(raw_signal)
@@ -881,6 +933,7 @@ def _signals_from_brief(
     categories: set[EvidenceCategory],
     terms: tuple[str, ...],
     limit: int = 8,
+    include_unstructured: bool = True,
 ) -> list[str]:
     signals: list[str] = []
     seen: set[str] = set()
@@ -891,22 +944,24 @@ def _signals_from_brief(
             not normalized_value
             or normalized_value in seen
             or len(signals) >= limit
-            or _is_negative_research_signal(normalized_value)
+            or _is_unusable_research_signal(normalized_value)
         ):
             return
         signals.append(normalized_value)
         seen.add(normalized_value)
 
     for item in brief.structured_evidence:
-        text = f"{item.category.value}: {item.title}. {item.summary}"
+        text = _sanitize_context_text(f"{item.category.value}: {item.title}. {item.summary}")
         normalized = text.casefold()
         if item.category in categories and any(term in normalized for term in terms):
             add_signal(text)
 
-    for raw_signal in [*brief.evidence, *brief.uncertainty]:
-        normalized = raw_signal.casefold()
-        if any(term in normalized for term in terms):
-            add_signal(raw_signal)
+    if include_unstructured:
+        for raw_signal in [*brief.evidence, *brief.uncertainty]:
+            raw_signal = _sanitize_context_text(raw_signal)
+            normalized = raw_signal.casefold()
+            if any(term in normalized for term in terms):
+                add_signal(raw_signal)
 
     return signals
 
@@ -921,6 +976,57 @@ def _is_negative_research_signal(value: str) -> bool:
         "httpstatuserror",
     )
     return any(marker in normalized for marker in negative_markers)
+
+
+def _sanitize_context_text(value: str) -> str:
+    compact = " ".join(value.split())
+    without_hot = re.sub(
+        r"\s*-\s*Hot attacks:.*?(?=\s*-\s*(?:Leaky defenses:|[A-ZÁÉÍÓÚÑ][^:]{1,80}:)|$)",
+        "",
+        compact,
+    )
+    return re.sub(
+        r"\s*-\s*Leaky defenses:.*?(?=\s*-\s*[A-ZÁÉÍÓÚÑ][^:]{1,80}:|$)",
+        "",
+        without_hot,
+    ).strip()
+
+
+def _is_unusable_research_signal(value: str) -> bool:
+    return (
+        _is_negative_research_signal(value)
+        or _is_instruction_signal(value)
+        or _is_generic_metric_reference(value)
+    )
+
+
+def _is_instruction_signal(value: str) -> bool:
+    normalized = value.casefold()
+    markers = (
+        ": evaluar ",
+        "requiere investigacion",
+        "requiere investigación",
+        "antes de envio real",
+        "antes de envío real",
+    )
+    return any(marker in normalized for marker in markers)
+
+
+def _is_generic_metric_reference(value: str) -> bool:
+    normalized = value.casefold()
+    generic_markers = (
+        "que es xg",
+        "qué es xg",
+        "expected goals (xg)",
+        "estadisticas xg para equipos",
+        "estadísticas xg para equipos",
+        "estadisticas de corners",
+        "estadísticas de córners",
+        "corner-stats",
+        "/stats/xg",
+        "footystats",
+    )
+    return any(marker in normalized for marker in generic_markers)
 
 
 def _analysis_dimensions_from_json(value: object) -> dict[str, list[str]]:
@@ -988,6 +1094,18 @@ def _ensure_match_research_signal_columns(connection: sqlite3.Connection) -> Non
         "rhythm_signals_json",
     )
     for column in signal_columns:
+        if column not in columns:
+            connection.execute(
+                f"ALTER TABLE match_research ADD COLUMN {column} TEXT NOT NULL DEFAULT '[]'"
+            )
+
+
+def _ensure_match_research_distribution_columns(connection: sqlite3.Connection) -> None:
+    columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(match_research)").fetchall()
+    }
+    for column in ("scoreline_distribution_json", "expected_points_candidates_json"):
         if column not in columns:
             connection.execute(
                 f"ALTER TABLE match_research ADD COLUMN {column} TEXT NOT NULL DEFAULT '[]'"
