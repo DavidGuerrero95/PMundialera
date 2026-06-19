@@ -87,6 +87,16 @@ esten en ventana de envio:
 pmundialera run next --limit 2 --json
 ```
 
+Vista manual por fecha, sin enviar nada:
+
+```powershell
+python -m mundialera.interfaces.cli run next --limit 8 --json
+```
+
+Filtra por la fecha objetivo en el JSON de salida. El comando ejecuta scraping,
+research web, Codex, construccion de prompt, matriz de marcadores y optimizador
+de puntos esperados, pero no escribe en GolPredictor.
+
 Ejecutar una pasada autonoma sobre todos los grupos configurados:
 
 ```powershell
@@ -296,14 +306,21 @@ La persistencia local en `.pmundialera/pmundialera.sqlite3` guarda tanto las
 predicciones como el briefing de investigacion por partido. La tabla
 `match_research` conserva equipos, torneo/grupo, evidencia textual, evidencia
 estructurada por categoria, incertidumbres, calibracion, perfil probabilistico y
-un indice de dimensiones para jugadores, titulares, suplentes, lesionados,
-convocados, arbitraje, faltas/tarjetas, hinchada, sede/cancha/clima, ritmo,
-ataque, defensa y jugadores diferenciales. Tambien persiste `star_player_signals`
-como dato dedicado para estrellas o jugadores desequilibrantes que puedan subir
-techo ofensivo, BTTS, over o cambiar el riesgo de marcador. Para auditoria del
-prompt tambien guarda campos dedicados: `team_state_signals`, `lineup_signals`,
+`scoreline_distribution`, `expected_points_candidates` y un indice de
+dimensiones para jugadores, titulares, suplentes, lesionados, convocados,
+arbitraje, faltas/tarjetas, hinchada, sede/cancha/clima, ritmo, ataque, defensa
+y jugadores diferenciales. Tambien persiste `star_player_signals` como dato
+dedicado para estrellas o jugadores desequilibrantes que puedan subir techo
+ofensivo, BTTS, over o cambiar el riesgo de marcador. Para auditoria del prompt
+tambien guarda campos dedicados: `team_state_signals`, `lineup_signals`,
 `bench_rotation_signals`, `availability_signals`, `player_discipline_signals` y
 `rhythm_signals`.
+
+Los agentes deben tratar `memory/` como la fuente canonica. La memoria de torneo
+puede conservar agregados globales, pero el prompt final solo debe inyectar
+estado de los dos equipos, contexto del mismo grupo cuando este mapeado y un
+prior global compacto. Paginas genericas de xG/corners, errores de busqueda y
+tareas de investigacion no cuentan como evidencia futbolistica.
 
 ## Validación
 

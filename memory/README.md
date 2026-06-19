@@ -17,3 +17,8 @@ duplicating rules.
 PMundialera coordinates football research subagents, generates calibrated score
 predictions, and operates GolPredictor groups safely through explicit ports and
 adapters.
+
+The prediction contract is production-oriented: research feeds a coherent
+scoreline distribution, the platform optimizes GolPredictor expected points
+deterministically, and the LLM explains evidence and risk without overriding the
+mathematical primary selection.

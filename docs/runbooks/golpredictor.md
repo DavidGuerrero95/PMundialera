@@ -92,9 +92,17 @@ source tier before the final Codex prompt is built.
 Each prediction receives calibration signals for draw risk, favorite-bias risk,
 missing evidence categories, and evidence quality.
 Before submission, the application derives an auditable probability profile
-for home/draw/away, over 2.5, both-teams-to-score, and expected goals. The final
-scoreline is checked by decision guardrails that cap confidence, reduce
-unsupported favorite margins, and force a draw hedge when draw risk is high.
+for home/draw/away, over 2.5, both-teams-to-score, and expected goals from a
+single scoreline distribution. The final primary is the scoreline that maximizes
+GolPredictor expected points, not necessarily the modal exact score. Decision
+guardrails cap confidence and reduce unsupported favorite margins; draw hedges
+are used only when draw probability and expected points compete with the primary
+class.
+
+Prompt context must stay scoped: use the two match teams, same-group state when
+mapped, and compact global tournament priors. Do not inject detailed state for
+unrelated teams, global hot-attack lists, global leaky-defense lists, generic xG
+explainers, search failures, or research tasks as football evidence.
 
 ## Pre-submit verification
 
@@ -109,7 +117,9 @@ pmundialera run once --dry-run --json
 ```
 
 The JSON preview should include `probabilities`, `decision_flags`, `primary`,
-`hedge`, and `confidence`. A real `--submit` run still writes only inside the
+`hedge`, and `confidence`. For debugging, inspect the local SQLite
+`match_research` row to verify `scoreline_distribution` and
+`expected_points_candidates`. A real `--submit` run still writes only inside the
 configured 35-minute window.
 
 ## Feedback loop
@@ -124,14 +134,16 @@ The local feedback state lives in `.pmundialera/pmundialera.sqlite3`.
 
 Prediction records include probabilities and guardrail flags so future analysis
 can improve calibration without overfitting to one match. Tournament state is
-regenerated from settled GolPredictor results and summarizes team form, goals
+regenerated from settled GolPredictor results and may summarize team form, goals
 for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
-tournament tempo.
+tournament tempo. Prediction prompts must inject only match-relevant team state,
+same-group state when mapped, and compact global priors.
 
 `match_research` stores match/team metadata, raw evidence, structured evidence,
-uncertainties, calibration, probability profile, and analysis dimensions for
-teams, tournament state, players, differential players, referees, fouls/cards,
-fans, venue/pitch/weather, starters, bench, injuries/suspensions/callups, rhythm,
+uncertainties, calibration, probability profile, `scoreline_distribution`,
+`expected_points_candidates`, and analysis dimensions for teams, tournament
+state, players, differential players, referees, fouls/cards, fans,
+venue/pitch/weather, starters, bench, injuries/suspensions/callups, rhythm,
 attack quality, and defensive quality. It also stores `star_player_signals` as a
 dedicated field for star or disruptive players that can change attacking ceiling,
 BTTS, over/under, or match volatility. Dedicated JSON signal fields also track

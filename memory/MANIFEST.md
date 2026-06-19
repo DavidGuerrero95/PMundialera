@@ -9,6 +9,7 @@
 | Architecture | `policies/02-hexagonal-python.md` |
 | GolPredictor operations | `rules/01-golpredictor-operations.md` |
 | Prediction workflow | `rules/02-prediction-workflow.md` |
+| Prediction scoring contract | `rules/02-prediction-workflow.md` |
 | Validation and done | `rules/03-validation-and-done-definition.md` |
 | MCP tools | `skills/mcp-agent-operations/SKILL.md` |
 | Research workflow | `skills/football-research/SKILL.md` |

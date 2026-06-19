@@ -21,7 +21,9 @@ For each match, collect or synthesize:
 - Group-table incentives and goal-difference pressure.
 - Goalkeepers, defensive line, and set pieces.
 
-The output must include two scorelines with rationale and confidence.
+The output must include two scorelines with rationale and confidence, but the
+primary scoreline must be selected by the deterministic expected-points
+optimizer when a probability profile is available.
 
 Research evidence should be deduplicated, enriched with bounded HTML scraping
 when pages are safely reachable, and scored by source quality. Prefer official
@@ -32,16 +34,35 @@ Before final score selection, produce calibration signals for draw risk,
 favorite-bias risk, missing categories, and evidence quality. A strong market or
 ranking favorite must be counterweighted by goalkeeper, defensive, set-piece,
 recent-stat, logistics, and conditions evidence before using a comfortable
-favorite scoreline.
+favorite scoreline. Do not treat operational failures, search tasks, or generic
+metric pages as football evidence.
 
-Prediction selection must be probability-first. Estimate home/draw/away,
-over/under, both-teams-to-score, and expected goals before deriving the exact
-scoreline. Use learning memory as a weak prior, especially with small samples;
-do not memorize one-off team results or overfit a single settled match.
+Prediction selection must be probability-first and internally coherent. Build one
+scoreline distribution, derive home/draw/away, over/under,
+both-teams-to-score, expected goals, and exact-score probabilities from that
+same distribution, then rank candidate scorelines by GolPredictor expected
+points:
+
+```text
+EP(h,a) = 5 * P(same 1X2 class)
+        + 2 * P(home goals = h)
+        + 2 * P(away goals = a)
+        + 1 * P(goal difference = h-a)
+```
+
+For knockout rounds the weights double, but the same maximization rule applies.
+The primary prediction is the highest-EP scoreline, not necessarily the modal
+exact score. Confidence represents the calibrated probability of the selected
+primary 1X2 class, not generic document quality.
+
+Use learning memory as a weak prior, especially with small samples; do not
+memorize one-off team results or overfit a single settled match.
 After each settled matchday, persist current tournament state: team form, goals
 for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
-draw/open-match tournament tempo. Inject only match-relevant team state into the
-next prediction.
+draw/open-match tournament tempo. Inject into the prompt only match-relevant team
+state, same-group state when mapped, and compact global tournament priors. Do
+not inject detailed state for unrelated teams or global hot/leaky team lists into
+LLM context.
 General uncertainty is not draw evidence. Draw must be supported by concrete
 signals such as market draw price, under profile, low block, goalkeeper edge,
 low conversion, fatigue, or matchup constraints. When class gap, market, form,
@@ -49,18 +70,19 @@ and attacking ceiling align, prefer a favorite win by one or two goals even when
 secondary evidence categories are incomplete.
 
 Before submission, apply decision guardrails that cap confidence for weak
-evidence, reduce unsupported comfortable favorite margins, and add a draw hedge
-when draw risk is high.
-The hedge is a portfolio pick, not an automatic draw. Preserve the same winner
-with a different total or margin when favorite edge, over profile, and
-both-teams-to-score are aligned. Use draw hedge only when draw probability is
-near the favorite or when a high BTTS/over profile specifically supports a
-high-scoring draw.
+evidence and reduce unsupported comfortable favorite margins.
+The hedge is a portfolio pick, not an automatic draw. Prefer the next
+competitive expected-points candidate that covers an identifiable uncertainty in
+winner, total, BTTS, or margin. Use draw hedge only when draw probability and
+expected points compete with the primary class, or when a high BTTS/over profile
+specifically supports a high-scoring draw.
 
 ## Final engine
 
-The platform collects and structures context. The final score decision belongs
-to the configured prediction engine. The preferred engine is Codex CLI via
+The platform collects and structures context. The configured prediction engine
+explains the football evidence and risk, but deterministic application code
+selects the final primary and hedge from the scoreline distribution whenever a
+probability profile is available. The preferred engine is Codex CLI via
 `codex exec -`, with a strict JSON response contract and heuristic fallback only
 when Codex is unavailable or returns invalid output.
 
@@ -69,4 +91,7 @@ when Codex is unavailable or returns invalid output.
 Every real submission must be persisted locally. After GolPredictor publishes a
 result, settle the prediction, calculate exact/winner/goals/difference
 performance, and update learning memory. Future Codex prompts must include that
-learning memory.
+learning memory. Research records must persist `probabilities`,
+`scoreline_distribution`, `expected_points_candidates`, calibration, coverage,
+and dedicated signal fields so future agents can audit the prompt without
+parsing generic evidence blobs.
