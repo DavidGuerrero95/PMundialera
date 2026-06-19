@@ -89,7 +89,37 @@ def test_codex_prompt_includes_calibration_payload() -> None:
                 source="example.test",
                 tier=SourceTier.GENERIC_WEB,
                 confidence=0.61,
-            )
+            ),
+            EvidenceItem(
+                category=EvidenceCategory.AVAILABILITY,
+                title="Titulares y bajas",
+                summary=(
+                    "Alineacion probable con suplente revulsivo, lesionado, "
+                    "convocado y suspendido."
+                ),
+                url="https://example.test/availability",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.62,
+            ),
+            EvidenceItem(
+                category=EvidenceCategory.REFEREE_DISCIPLINE,
+                title="Tarjetas de jugadores",
+                summary="Un titular llega con amarillas acumuladas y riesgo de roja.",
+                url="https://example.test/cards",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.58,
+            ),
+            EvidenceItem(
+                category=EvidenceCategory.FORM,
+                title="Ritmo del equipo",
+                summary="El equipo llega en buen ritmo, con racha positiva e intensidad alta.",
+                url="https://example.test/form",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.6,
+            ),
         ],
     )
 
@@ -109,12 +139,21 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert "## Formato de salida obligatorio" in prompt
     assert "```json" in prompt
     assert '"star_player_signals"' in prompt
+    assert '"team_state_signals"' in prompt
+    assert '"lineup_signals"' in prompt
+    assert '"bench_rotation_signals"' in prompt
+    assert '"availability_signals"' in prompt
+    assert '"player_discipline_signals"' in prompt
+    assert '"rhythm_signals"' in prompt
     assert '"expected_analysis_dimensions"' in prompt
     assert '"jugadores_diferenciables"' in prompt
     assert '"jugadores_estrellas_desequilibrantes"' in prompt
     assert '"lesionados_sancionados_convocados"' in prompt
+    assert '"jugadores_amarillas_rojas_suspendidos"' in prompt
     assert '"faltas_tarjetas"' in prompt
     assert "estrella desequilibrante" in prompt
+    assert "amarillas acumuladas" in prompt
+    assert "suplente revulsivo" in prompt
     assert "tu respuesta debe ser exclusivamente\n        JSON valido" not in prompt
     assert "tu respuesta debe ser exclusivamente\nJSON valido" in prompt
     assert "marcadores comodos" in prompt
@@ -140,6 +179,10 @@ def test_codex_prompt_uses_match_scoped_star_player_memory() -> None:
             "# PMundialera recent research signals\n"
             "- Estados Unidos - Australia:\n"
             "  - star_player_signal: Pulisic and Balogun are differential attackers.\n"
+            "  - lineup_signal: Probable XI includes the same attacking trio.\n"
+            "  - availability_signal: One defender is suspended.\n"
+            "  - player_discipline_signal: Midfielder has yellow-card accumulation risk.\n"
+            "  - rhythm_signal: Team arrives with high rhythm and strong pressure.\n"
             "- Francia - Senegal:\n"
             "  - star_player_signal: unrelated player context.\n"
         ),
@@ -148,3 +191,7 @@ def test_codex_prompt_uses_match_scoped_star_player_memory() -> None:
     assert "Pulisic and Balogun" in prompt
     assert "unrelated player context" in prompt
     assert '"star_player_signals": [\n    "Pulisic and Balogun' in prompt
+    assert '"lineup_signals": [\n    "Probable XI includes' in prompt
+    assert '"availability_signals": [\n    "One defender is suspended' in prompt
+    assert '"player_discipline_signals": [\n    "Midfielder has yellow-card' in prompt
+    assert '"rhythm_signals": [\n    "Team arrives with high rhythm' in prompt

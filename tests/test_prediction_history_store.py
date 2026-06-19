@@ -184,6 +184,7 @@ def test_prediction_store_persists_match_research_dimensions(tmp_path: Path) -> 
     brief = ResearchBrief(
         match=match,
         evidence=[
+            "grupo abierto con buena forma, racha positiva y necesidad de puntos",
             "hinchada local y estadio con clima pesado",
             "jugador clave llega con buen ritmo y alto xG",
         ],
@@ -191,7 +192,10 @@ def test_prediction_store_persists_match_research_dimensions(tmp_path: Path) -> 
             EvidenceItem(
                 category=EvidenceCategory.AVAILABILITY,
                 title="Titularidad y lesionados",
-                summary="Alineacion probable, suplente clave, convocado y lesion defensiva.",
+                summary=(
+                    "Alineacion probable, suplente clave, convocado, suspendido "
+                    "y lesion defensiva."
+                ),
                 url="https://example.test/availability",
                 source="example.test",
                 tier=SourceTier.GENERIC_WEB,
@@ -200,11 +204,23 @@ def test_prediction_store_persists_match_research_dimensions(tmp_path: Path) -> 
             EvidenceItem(
                 category=EvidenceCategory.REFEREE_DISCIPLINE,
                 title="Arbitro y tarjetas",
-                summary="Arbitro con promedio alto de tarjetas, faltas y penales.",
+                summary=(
+                    "Arbitro con promedio alto de tarjetas, faltas y penales; "
+                    "titular con amarillas acumuladas y riesgo de roja."
+                ),
                 url="https://example.test/referee",
                 source="example.test",
                 tier=SourceTier.GENERIC_WEB,
                 confidence=0.58,
+            ),
+            EvidenceItem(
+                category=EvidenceCategory.FORM,
+                title="Estado y ritmo",
+                summary="Equipo en buen ritmo, racha positiva e intensidad alta.",
+                url="https://example.test/form",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.6,
             ),
             EvidenceItem(
                 category=EvidenceCategory.PLAYER_CONTEXT,
@@ -251,11 +267,23 @@ def test_prediction_store_persists_match_research_dimensions(tmp_path: Path) -> 
     assert loaded.analysis_dimensions["lesionados_sancionados_convocados"]
     assert loaded.analysis_dimensions["arbitros"]
     assert loaded.analysis_dimensions["faltas_tarjetas"]
+    assert loaded.analysis_dimensions["jugadores_amarillas_rojas_suspendidos"]
     assert loaded.analysis_dimensions["buen_ritmo"]
     assert loaded.analysis_dimensions["buen_ataque"]
     assert loaded.analysis_dimensions["buena_defensa"]
     assert loaded.analysis_dimensions["mala_defensa"]
     assert loaded.analysis_dimensions["jugadores_estrellas_desequilibrantes"]
     assert loaded.star_player_signals
+    assert loaded.team_state_signals
+    assert loaded.lineup_signals
+    assert loaded.bench_rotation_signals
+    assert loaded.availability_signals
+    assert loaded.player_discipline_signals
+    assert loaded.rhythm_signals
     assert any("regate diferencial" in item for item in loaded.star_player_signals)
+    assert any("Alineacion probable" in item for item in loaded.lineup_signals)
+    assert any("suplente clave" in item for item in loaded.bench_rotation_signals)
+    assert any("suspendido" in item for item in loaded.availability_signals)
+    assert any("amarillas acumuladas" in item for item in loaded.player_discipline_signals)
+    assert any("buen ritmo" in item for item in loaded.rhythm_signals)
     assert "market" in loaded.analysis_dimensions["gaps_evidencia"]

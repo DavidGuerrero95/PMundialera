@@ -188,11 +188,18 @@ class WebSearchResearchAgent(ResearchAgent):
         return [
             QuerySpec(
                 EvidenceCategory.AVAILABILITY,
-                f"{label} alineaciones oficiales probables lesiones sancionados mundial 2026",
+                f"{label} alineaciones oficiales probables titulares suplentes lesiones "
+                "sancionados mundial 2026",
             ),
             QuerySpec(
                 EvidenceCategory.AVAILABILITY,
-                f"{label} bajas ultima hora convocatoria molestias entrenamiento mundial 2026",
+                f"{label} bajas ultima hora convocados lesionados suspendidos molestias "
+                "entrenamiento mundial 2026",
+            ),
+            QuerySpec(
+                EvidenceCategory.REFEREE_DISCIPLINE,
+                f"{label} jugadores amarillas rojas suspendidos sancionados acumulacion "
+                "tarjetas mundial 2026",
             ),
             QuerySpec(
                 EvidenceCategory.PLAYER_CONTEXT,
@@ -206,7 +213,8 @@ class WebSearchResearchAgent(ResearchAgent):
             ),
             QuerySpec(
                 EvidenceCategory.TACTICS,
-                f"{label} previa tactica titulares suplentes entrenadores mundial 2026",
+                f"{label} previa tactica titulares suplentes rotacion ritmo entrenadores "
+                "mundial 2026",
             ),
             QuerySpec(
                 EvidenceCategory.VENUE_WEATHER,
@@ -243,7 +251,7 @@ class WebSearchResearchAgent(ResearchAgent):
             ),
             QuerySpec(
                 EvidenceCategory.REFEREE_DISCIPLINE,
-                f"{label} arbitro tarjetas penales disciplina mundial 2026",
+                f"{label} arbitro tarjetas amarillas rojas penales disciplina mundial 2026",
             ),
             QuerySpec(
                 EvidenceCategory.TABLE_INCENTIVES,

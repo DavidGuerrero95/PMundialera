@@ -7,6 +7,7 @@ from mundialera.application.feedback import FeedbackService
 from mundialera.application.orchestrator import PredictionOrchestrator
 from mundialera.application.subagents import HeuristicPredictionModel, default_research_agent
 from mundialera.application.tournament_memory import TournamentMemoryResearchAgent
+from mundialera.domain.models import ResearchRecord
 from mundialera.domain.ports import PredictionModel, ResearchAgent
 from mundialera.infrastructure.codex.prediction_model import CodexCliConfig, CodexCliPredictionModel
 from mundialera.infrastructure.golpredictor.client import (
@@ -94,18 +95,38 @@ def _combined_prediction_memory(store: SqlitePredictionStore) -> str:
 def _recent_research_memory(store: SqlitePredictionStore) -> str:
     lines = ["# PMundialera recent research signals"]
     for record in store.load_research_records()[-8:]:
-        signals = [
-            signal for signal in record.star_player_signals if _usable_star_player_signal(signal)
-        ]
+        signals = _record_research_signals(record)
         if not signals:
             continue
         lines.append(f"- {record.match_label}:")
-        for signal in signals[:3]:
-            lines.append(f"  - star_player_signal: {_compact_memory_line(signal)}")
+        for label, signal in signals[:8]:
+            lines.append(f"  - {label}: {_compact_memory_line(signal)}")
     return "\n".join(lines) if len(lines) > 1 else ""
 
 
+def _record_research_signals(record: ResearchRecord) -> list[tuple[str, str]]:
+    labeled_groups = (
+        ("star_player_signal", record.star_player_signals),
+        ("team_state_signal", record.team_state_signals),
+        ("lineup_signal", record.lineup_signals),
+        ("bench_rotation_signal", record.bench_rotation_signals),
+        ("availability_signal", record.availability_signals),
+        ("player_discipline_signal", record.player_discipline_signals),
+        ("rhythm_signal", record.rhythm_signals),
+    )
+    signals: list[tuple[str, str]] = []
+    for label, values in labeled_groups:
+        for value in values[:2]:
+            if _usable_research_signal(value):
+                signals.append((label, value))
+    return signals
+
+
 def _usable_star_player_signal(value: str) -> bool:
+    return _usable_research_signal(value)
+
+
+def _usable_research_signal(value: str) -> bool:
     normalized = value.casefold()
     negative_markers = (
         "sin resultados",

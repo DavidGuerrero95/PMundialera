@@ -281,7 +281,10 @@ un indice de dimensiones para jugadores, titulares, suplentes, lesionados,
 convocados, arbitraje, faltas/tarjetas, hinchada, sede/cancha/clima, ritmo,
 ataque, defensa y jugadores diferenciales. Tambien persiste `star_player_signals`
 como dato dedicado para estrellas o jugadores desequilibrantes que puedan subir
-techo ofensivo, BTTS, over o cambiar el riesgo de marcador.
+techo ofensivo, BTTS, over o cambiar el riesgo de marcador. Para auditoria del
+prompt tambien guarda campos dedicados: `team_state_signals`, `lineup_signals`,
+`bench_rotation_signals`, `availability_signals`, `player_discipline_signals` y
+`rhythm_signals`.
 
 ## ValidaciÃ³n
 

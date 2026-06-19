@@ -134,7 +134,10 @@ teams, tournament state, players, differential players, referees, fouls/cards,
 fans, venue/pitch/weather, starters, bench, injuries/suspensions/callups, rhythm,
 attack quality, and defensive quality. It also stores `star_player_signals` as a
 dedicated field for star or disruptive players that can change attacking ceiling,
-BTTS, over/under, or match volatility.
+BTTS, over/under, or match volatility. Dedicated JSON signal fields also track
+team state, likely starters, bench/rotation, availability, individual player
+discipline, and rhythm so the LLM prompt can be audited without parsing generic
+evidence blobs.
 
 Commands:
 

@@ -23,7 +23,7 @@ from mundialera.domain.models import (
 )
 from mundialera.domain.ports import PredictionHistory, PredictionRecorder, ResearchRecorder
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 ANALYSIS_DIMENSION_TERMS: dict[str, tuple[str, ...]] = {
@@ -43,6 +43,16 @@ ANALYSIS_DIMENSION_TERMS: dict[str, tuple[str, ...]] = {
     ),
     "arbitros": ("arbitro", "referee"),
     "faltas_tarjetas": ("falta", "tarjeta", "cards", "disciplina", "penal"),
+    "jugadores_amarillas_rojas_suspendidos": (
+        "amarilla",
+        "yellow card",
+        "roja",
+        "red card",
+        "suspendido",
+        "suspension",
+        "sancionado",
+        "acumulacion",
+    ),
     "hinchada": ("hinchada", "aficion", "fans", "supporters", "localia"),
     "sede_cancha_clima": ("estadio", "sede", "venue", "clima", "cancha", "humidity", "calor"),
     "titularidad": ("titular", "alineacion", "starting", "lineup", "xi"),
@@ -67,6 +77,87 @@ ANALYSIS_DIMENSION_TERMS: dict[str, tuple[str, ...]] = {
         "concede",
         "leaky",
         "bajas defensivas",
+    ),
+}
+
+SIGNAL_TERMS: dict[str, tuple[str, ...]] = {
+    "team_state": (
+        "forma",
+        "racha",
+        "grupo",
+        "tabla",
+        "puntos",
+        "diferencia de gol",
+        "clasificacion",
+        "moral",
+        "momentum",
+        "state",
+    ),
+    "lineup": (
+        "alineacion",
+        "alineación",
+        "once",
+        "xi",
+        "titular",
+        "starting",
+        "lineup",
+        "probable",
+        "formacion",
+        "formación",
+    ),
+    "bench_rotation": (
+        "suplente",
+        "suplencia",
+        "bench",
+        "rotacion",
+        "rotación",
+        "substitute",
+        "revulsivo",
+        "cambios",
+        "descanso",
+    ),
+    "availability": (
+        "lesion",
+        "lesión",
+        "injury",
+        "baja",
+        "duda",
+        "molestia",
+        "sancionado",
+        "suspendido",
+        "convocado",
+        "call-up",
+        "disponible",
+        "availability",
+    ),
+    "player_discipline": (
+        "amarilla",
+        "amarillas",
+        "yellow card",
+        "roja",
+        "rojas",
+        "red card",
+        "suspendido",
+        "suspension",
+        "suspensión",
+        "sancionado",
+        "acumulacion",
+        "acumulación",
+        "faltas",
+        "disciplina",
+    ),
+    "rhythm": (
+        "ritmo",
+        "buen ritmo",
+        "mal ritmo",
+        "intensidad",
+        "presion",
+        "presión",
+        "tempo",
+        "fatiga",
+        "minutos",
+        "racha",
+        "forma reciente",
     ),
 }
 
@@ -128,6 +219,49 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
             probabilities=brief.probability_profile,
             analysis_dimensions=_analysis_dimensions_from_brief(brief),
             star_player_signals=_star_player_signals_from_brief(brief),
+            team_state_signals=_signals_from_brief(
+                brief,
+                categories={
+                    EvidenceCategory.FORM,
+                    EvidenceCategory.TABLE_INCENTIVES,
+                    EvidenceCategory.RECENT_MATCH_STATS,
+                },
+                terms=SIGNAL_TERMS["team_state"],
+            ),
+            lineup_signals=_signals_from_brief(
+                brief,
+                categories={EvidenceCategory.AVAILABILITY, EvidenceCategory.TACTICS},
+                terms=SIGNAL_TERMS["lineup"],
+            ),
+            bench_rotation_signals=_signals_from_brief(
+                brief,
+                categories={
+                    EvidenceCategory.AVAILABILITY,
+                    EvidenceCategory.TACTICS,
+                    EvidenceCategory.REST_TRAVEL,
+                },
+                terms=SIGNAL_TERMS["bench_rotation"],
+            ),
+            availability_signals=_signals_from_brief(
+                brief,
+                categories={EvidenceCategory.AVAILABILITY, EvidenceCategory.NEWS},
+                terms=SIGNAL_TERMS["availability"],
+            ),
+            player_discipline_signals=_signals_from_brief(
+                brief,
+                categories={EvidenceCategory.REFEREE_DISCIPLINE, EvidenceCategory.AVAILABILITY},
+                terms=SIGNAL_TERMS["player_discipline"],
+            ),
+            rhythm_signals=_signals_from_brief(
+                brief,
+                categories={
+                    EvidenceCategory.FORM,
+                    EvidenceCategory.RECENT_MATCH_STATS,
+                    EvidenceCategory.REST_TRAVEL,
+                    EvidenceCategory.TACTICS,
+                },
+                terms=SIGNAL_TERMS["rhythm"],
+            ),
         )
         with self._connect() as connection:
             self._insert_research_record(connection, record)
@@ -174,7 +308,10 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 SELECT record_id, created_at, group_name, match_id, match_label, kickoff,
                        home_team, away_team, evidence_json, structured_evidence_json,
                        uncertainty_json, calibration_json, probabilities_json,
-                       analysis_dimensions_json, star_player_signals_json
+                       analysis_dimensions_json, star_player_signals_json,
+                       team_state_signals_json, lineup_signals_json,
+                       bench_rotation_signals_json, availability_signals_json,
+                       player_discipline_signals_json, rhythm_signals_json
                 FROM match_research
                 ORDER BY created_at ASC, rowid ASC
                 """
@@ -278,7 +415,13 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 calibration_json TEXT,
                 probabilities_json TEXT,
                 analysis_dimensions_json TEXT NOT NULL,
-                star_player_signals_json TEXT NOT NULL DEFAULT '[]'
+                star_player_signals_json TEXT NOT NULL DEFAULT '[]',
+                team_state_signals_json TEXT NOT NULL DEFAULT '[]',
+                lineup_signals_json TEXT NOT NULL DEFAULT '[]',
+                bench_rotation_signals_json TEXT NOT NULL DEFAULT '[]',
+                availability_signals_json TEXT NOT NULL DEFAULT '[]',
+                player_discipline_signals_json TEXT NOT NULL DEFAULT '[]',
+                rhythm_signals_json TEXT NOT NULL DEFAULT '[]'
             );
 
             CREATE INDEX IF NOT EXISTS idx_match_research_group_match
@@ -288,6 +431,7 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
             """
         )
         _ensure_match_research_star_player_column(connection)
+        _ensure_match_research_signal_columns(connection)
         self._write_metadata("schema_version", str(SCHEMA_VERSION), connection=connection)
 
     def _insert_prediction(
@@ -373,9 +517,12 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 record_id, created_at, group_name, match_id, match_label, kickoff,
                 home_team, away_team, evidence_json, structured_evidence_json,
                 uncertainty_json, calibration_json, probabilities_json,
-                analysis_dimensions_json, star_player_signals_json
+                analysis_dimensions_json, star_player_signals_json,
+                team_state_signals_json, lineup_signals_json,
+                bench_rotation_signals_json, availability_signals_json,
+                player_discipline_signals_json, rhythm_signals_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.record_id,
@@ -393,6 +540,12 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
                 _probabilities_to_json(record.probabilities),
                 json.dumps(record.analysis_dimensions, ensure_ascii=False, sort_keys=True),
                 json.dumps(record.star_player_signals, ensure_ascii=False),
+                json.dumps(record.team_state_signals, ensure_ascii=False),
+                json.dumps(record.lineup_signals, ensure_ascii=False),
+                json.dumps(record.bench_rotation_signals, ensure_ascii=False),
+                json.dumps(record.availability_signals, ensure_ascii=False),
+                json.dumps(record.player_discipline_signals, ensure_ascii=False),
+                json.dumps(record.rhythm_signals, ensure_ascii=False),
             ),
         )
 
@@ -495,6 +648,12 @@ def _research_record_from_row(row: sqlite3.Row) -> ResearchRecord:
         probabilities=_probabilities_from_json(row["probabilities_json"]),
         analysis_dimensions=_analysis_dimensions_from_json(row["analysis_dimensions_json"]),
         star_player_signals=_json_string_list(row["star_player_signals_json"]),
+        team_state_signals=_json_string_list(row["team_state_signals_json"]),
+        lineup_signals=_json_string_list(row["lineup_signals_json"]),
+        bench_rotation_signals=_json_string_list(row["bench_rotation_signals_json"]),
+        availability_signals=_json_string_list(row["availability_signals_json"]),
+        player_discipline_signals=_json_string_list(row["player_discipline_signals_json"]),
+        rhythm_signals=_json_string_list(row["rhythm_signals_json"]),
     )
 
 
@@ -714,7 +873,54 @@ def _star_player_signals_from_brief(brief: ResearchBrief) -> list[str]:
             add_signal(raw_signal)
 
     return signals
+
+
+def _signals_from_brief(
+    brief: ResearchBrief,
+    *,
+    categories: set[EvidenceCategory],
+    terms: tuple[str, ...],
+    limit: int = 8,
+) -> list[str]:
+    signals: list[str] = []
+    seen: set[str] = set()
+
+    def add_signal(value: str) -> None:
+        normalized_value = value.strip()
+        if (
+            not normalized_value
+            or normalized_value in seen
+            or len(signals) >= limit
+            or _is_negative_research_signal(normalized_value)
+        ):
+            return
+        signals.append(normalized_value)
+        seen.add(normalized_value)
+
+    for item in brief.structured_evidence:
+        text = f"{item.category.value}: {item.title}. {item.summary}"
+        normalized = text.casefold()
+        if item.category in categories and any(term in normalized for term in terms):
+            add_signal(text)
+
+    for raw_signal in [*brief.evidence, *brief.uncertainty]:
+        normalized = raw_signal.casefold()
+        if any(term in normalized for term in terms):
+            add_signal(raw_signal)
+
     return signals
+
+
+def _is_negative_research_signal(value: str) -> bool:
+    normalized = value.casefold()
+    negative_markers = (
+        "sin resultados",
+        "fallo consulta",
+        "page-scrape: fallo",
+        "connecterror",
+        "httpstatuserror",
+    )
+    return any(marker in normalized for marker in negative_markers)
 
 
 def _analysis_dimensions_from_json(value: object) -> dict[str, list[str]]:
@@ -766,3 +972,23 @@ def _ensure_match_research_star_player_column(connection: sqlite3.Connection) ->
             "ALTER TABLE match_research "
             "ADD COLUMN star_player_signals_json TEXT NOT NULL DEFAULT '[]'"
         )
+
+
+def _ensure_match_research_signal_columns(connection: sqlite3.Connection) -> None:
+    columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(match_research)").fetchall()
+    }
+    signal_columns = (
+        "team_state_signals_json",
+        "lineup_signals_json",
+        "bench_rotation_signals_json",
+        "availability_signals_json",
+        "player_discipline_signals_json",
+        "rhythm_signals_json",
+    )
+    for column in signal_columns:
+        if column not in columns:
+            connection.execute(
+                f"ALTER TABLE match_research ADD COLUMN {column} TEXT NOT NULL DEFAULT '[]'"
+            )

@@ -217,6 +217,12 @@ class ResearchRecord:
     probabilities: ProbabilityProfile | None = None
     analysis_dimensions: dict[str, list[str]] = field(default_factory=dict)
     star_player_signals: list[str] = field(default_factory=list)
+    team_state_signals: list[str] = field(default_factory=list)
+    lineup_signals: list[str] = field(default_factory=list)
+    bench_rotation_signals: list[str] = field(default_factory=list)
+    availability_signals: list[str] = field(default_factory=list)
+    player_discipline_signals: list[str] = field(default_factory=list)
+    rhythm_signals: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

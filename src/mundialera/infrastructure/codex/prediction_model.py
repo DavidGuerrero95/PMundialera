@@ -12,6 +12,87 @@ from dataclasses import dataclass
 from mundialera.domain.models import Prediction, ResearchBrief, Scoreline
 from mundialera.domain.ports import PredictionModel
 
+SIGNAL_TERMS: dict[str, tuple[str, ...]] = {
+    "team_state": (
+        "forma",
+        "racha",
+        "grupo",
+        "tabla",
+        "puntos",
+        "diferencia de gol",
+        "clasificacion",
+        "moral",
+        "momentum",
+        "state",
+    ),
+    "lineup": (
+        "alineacion",
+        "alineación",
+        "once",
+        "xi",
+        "titular",
+        "starting",
+        "lineup",
+        "probable",
+        "formacion",
+        "formación",
+    ),
+    "bench_rotation": (
+        "suplente",
+        "suplencia",
+        "bench",
+        "rotacion",
+        "rotación",
+        "substitute",
+        "revulsivo",
+        "cambios",
+        "descanso",
+    ),
+    "availability": (
+        "lesion",
+        "lesión",
+        "injury",
+        "baja",
+        "duda",
+        "molestia",
+        "sancionado",
+        "suspendido",
+        "convocado",
+        "call-up",
+        "disponible",
+        "availability",
+    ),
+    "player_discipline": (
+        "amarilla",
+        "amarillas",
+        "yellow card",
+        "roja",
+        "rojas",
+        "red card",
+        "suspendido",
+        "suspension",
+        "suspensión",
+        "sancionado",
+        "acumulacion",
+        "acumulación",
+        "faltas",
+        "disciplina",
+    ),
+    "rhythm": (
+        "ritmo",
+        "buen ritmo",
+        "mal ritmo",
+        "intensidad",
+        "presion",
+        "presión",
+        "tempo",
+        "fatiga",
+        "minutos",
+        "racha",
+        "forma reciente",
+    ),
+}
+
 
 class CodexPredictionError(RuntimeError):
     """Raised when Codex CLI cannot produce a valid prediction."""
@@ -107,6 +188,48 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
             learning_memory,
             match_label=match.label,
         )
+    team_state_signals = _signals_from_brief(
+        brief,
+        categories={"form", "table_incentives", "recent_match_stats"},
+        terms=SIGNAL_TERMS["team_state"],
+    ) or _signals_from_memory(learning_memory, match_label=match.label, label="team_state_signal")
+    lineup_signals = _signals_from_brief(
+        brief,
+        categories={"availability", "tactics"},
+        terms=SIGNAL_TERMS["lineup"],
+    ) or _signals_from_memory(learning_memory, match_label=match.label, label="lineup_signal")
+    bench_rotation_signals = _signals_from_brief(
+        brief,
+        categories={"availability", "tactics", "rest_travel"},
+        terms=SIGNAL_TERMS["bench_rotation"],
+    ) or _signals_from_memory(
+        learning_memory,
+        match_label=match.label,
+        label="bench_rotation_signal",
+    )
+    availability_signals = _signals_from_brief(
+        brief,
+        categories={"availability", "news"},
+        terms=SIGNAL_TERMS["availability"],
+    ) or _signals_from_memory(
+        learning_memory,
+        match_label=match.label,
+        label="availability_signal",
+    )
+    player_discipline_signals = _signals_from_brief(
+        brief,
+        categories={"referee_discipline", "availability"},
+        terms=SIGNAL_TERMS["player_discipline"],
+    ) or _signals_from_memory(
+        learning_memory,
+        match_label=match.label,
+        label="player_discipline_signal",
+    )
+    rhythm_signals = _signals_from_brief(
+        brief,
+        categories={"form", "recent_match_stats", "rest_travel", "tactics"},
+        terms=SIGNAL_TERMS["rhythm"],
+    ) or _signals_from_memory(learning_memory, match_label=match.label, label="rhythm_signal")
     context = {
         "match": {
             "id": match.match_id,
@@ -133,6 +256,12 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         ],
         "uncertainty": brief.uncertainty,
         "star_player_signals": star_player_signals,
+        "team_state_signals": team_state_signals,
+        "lineup_signals": lineup_signals,
+        "bench_rotation_signals": bench_rotation_signals,
+        "availability_signals": availability_signals,
+        "player_discipline_signals": player_discipline_signals,
+        "rhythm_signals": rhythm_signals,
         "expected_analysis_dimensions": [
             "equipos",
             "torneo",
@@ -141,6 +270,7 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
             "jugadores_estrellas_desequilibrantes",
             "arbitros",
             "faltas_tarjetas",
+            "jugadores_amarillas_rojas_suspendidos",
             "hinchada",
             "sede_cancha_clima",
             "titularidad",
@@ -208,6 +338,7 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         - arbitros, faltas, tarjetas, penales y disciplina
         - hinchada, localia, sede, estadio, cancha y clima
         - titularidad, suplencia, rotaciones, convocados, lesionados y sancionados
+        - jugadores con amarillas, rojas, acumulacion, sancion o suspension
         - buen ritmo, mal ritmo, partido abierto o partido cerrado
         - buen ataque, mal ataque, buena defensa y mala defensa
         - porteros, centrales, laterales, balon parado y fragilidad defensiva
@@ -226,6 +357,27 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         Si una estrella esta disponible y en buen ritmo, puede justificar subir techo
         ofensivo, BTTS u over. Si falta, llega tocada o no inicia, reduce confianza y
         explicalo en `evidence_gaps` o `risk_flags`.
+
+        ## Estado de equipo, plantilla y disciplina
+
+        Trata estos campos como insumos operativos, no como texto decorativo:
+
+        - `team_state_signals`: forma actual, tabla, moral, necesidad de puntos y
+          tendencia reciente del equipo.
+        - `lineup_signals`: titulares probables/oficiales, XI, sistema y roles.
+        - `bench_rotation_signals`: suplentes, rotaciones, descanso, fatiga y
+          revulsivos.
+        - `availability_signals`: lesionados, tocados, sancionados, suspendidos,
+          convocados, bajas y dudas de ultima hora.
+        - `player_discipline_signals`: amarillas, rojas, acumulacion de tarjetas,
+          riesgo/sancion/suspension individual y arbitraje que pueda condicionar.
+        - `rhythm_signals`: buen/mal ritmo, intensidad, minutos recientes, fatiga,
+          presion y si el partido tiende a abierto o cerrado.
+
+        Si un titular clave falta, llega tocado, esta suspendido o condicionado por
+        tarjetas, ajusta 1X2, goles esperados, BTTS/under-over y `confidence`.
+        Si la informacion no existe o contradice otra fuente, dejalo como gap
+        explicito.
 
         ## Memoria de torneo y aprendizaje
 
@@ -403,18 +555,80 @@ def _star_player_signals_from_brief(brief: ResearchBrief) -> list[str]:
     return signals
 
 
+def _signals_from_brief(
+    brief: ResearchBrief,
+    *,
+    categories: set[str],
+    terms: tuple[str, ...],
+    limit: int = 8,
+) -> list[str]:
+    signals: list[str] = []
+    seen: set[str] = set()
+
+    def add_signal(value: str) -> None:
+        normalized_value = value.strip()
+        if (
+            not normalized_value
+            or normalized_value in seen
+            or len(signals) >= limit
+            or _is_negative_research_signal(normalized_value)
+        ):
+            return
+        signals.append(normalized_value)
+        seen.add(normalized_value)
+
+    for item in brief.structured_evidence:
+        text = f"{item.category.value}: {item.title}. {item.summary}"
+        normalized = text.casefold()
+        if item.category.value in categories and any(term in normalized for term in terms):
+            add_signal(text)
+
+    for raw_signal in [*brief.evidence, *brief.uncertainty]:
+        normalized = raw_signal.casefold()
+        if any(term in normalized for term in terms):
+            add_signal(raw_signal)
+
+    return signals
+
+
+def _is_negative_research_signal(value: str) -> bool:
+    normalized = value.casefold()
+    negative_markers = (
+        "sin resultados",
+        "fallo consulta",
+        "page-scrape: fallo",
+        "connecterror",
+        "httpstatuserror",
+    )
+    return any(marker in normalized for marker in negative_markers)
+
+
 def _star_player_signals_from_memory(learning_memory: str, *, match_label: str) -> list[str]:
+    return _signals_from_memory(
+        learning_memory,
+        match_label=match_label,
+        label="star_player_signal",
+    )
+
+
+def _signals_from_memory(
+    learning_memory: str,
+    *,
+    match_label: str,
+    label: str,
+) -> list[str]:
     signals: list[str] = []
     active_match = False
     match_header = f"- {match_label}:"
+    label_prefix = f"{label}:"
     for line in learning_memory.splitlines():
         stripped = line.strip()
-        if stripped.startswith("- ") and not stripped.startswith("- star_player_signal:"):
+        if stripped.startswith("- ") and "_signal:" not in stripped:
             active_match = stripped == match_header
             continue
-        if not active_match or "star_player_signal:" not in stripped:
+        if not active_match or label_prefix not in stripped:
             continue
-        _, _, signal = stripped.partition("star_player_signal:")
+        _, _, signal = stripped.partition(label_prefix)
         normalized_signal = signal.strip()
         if normalized_signal:
             signals.append(normalized_signal)
