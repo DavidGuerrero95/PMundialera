@@ -352,13 +352,13 @@ def feedback_settle(
     payload = {
         "new_outcomes": count,
         "groups": settings.configured_groups(),
-        "learning_memory": str(build_prediction_store(settings).learning_path),
+        "database": str(build_prediction_store(settings).database_path),
     }
     if json_output:
         console.print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
     console.print(f"Feedback settled. New outcomes: {count}")
-    console.print(f"Learning memory: {payload['learning_memory']}")
+    console.print(f"SQLite database: {payload['database']}")
 
 
 @feedback_app.command("status")
@@ -368,8 +368,7 @@ def feedback_status() -> None:
     outcomes = store.load_outcomes()
     console.print(f"Prediction records: {len(records)}")
     console.print(f"Settled outcomes: {len(outcomes)}")
-    console.print(f"Learning memory: {store.learning_path}")
-    console.print(f"Tournament state: {store.tournament_state_path}")
+    console.print(f"SQLite database: {store.database_path}")
     if store.load_learning_memory():
         console.print(store.load_learning_memory())
 

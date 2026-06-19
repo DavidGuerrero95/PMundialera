@@ -6,14 +6,14 @@ from datetime import datetime
 from mundialera.application.tournament_state import build_tournament_state_memory
 from mundialera.domain.models import Match, PredictionOutcome, PredictionRecord, Scoreline
 from mundialera.domain.ports import FixtureRepository
-from mundialera.infrastructure.local_store.history import JsonlPredictionStore
+from mundialera.infrastructure.local_store.history import SqlitePredictionStore
 
 
 class FeedbackService:
     def __init__(
         self,
         fixtures: FixtureRepository,
-        store: JsonlPredictionStore,
+        store: SqlitePredictionStore,
         *,
         now: datetime,
     ) -> None:

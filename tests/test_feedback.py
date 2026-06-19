@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from mundialera.application.feedback import FeedbackService, build_learning_memory
 from mundialera.domain.models import Match, Prediction, Scoreline, SubmissionResult, Team
-from mundialera.infrastructure.local_store.history import JsonlPredictionStore
+from mundialera.infrastructure.local_store.history import SqlitePredictionStore
 
 
 class FakeFixtures:
@@ -28,7 +28,7 @@ class FakeFixtures:
 
 
 def test_feedback_settles_submitted_prediction_and_writes_memory(tmp_path: Path) -> None:
-    store = JsonlPredictionStore(tmp_path, timezone_name="America/Bogota")
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
     match = Match(
         match_id="1",
         kickoff=None,
@@ -69,7 +69,7 @@ def test_feedback_settles_submitted_prediction_and_writes_memory(tmp_path: Path)
 
 
 def test_learning_memory_flags_missed_draw_pattern(tmp_path: Path) -> None:
-    store = JsonlPredictionStore(tmp_path, timezone_name="America/Bogota")
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
     match = Match(
         match_id="1",
         kickoff=None,
@@ -124,7 +124,7 @@ def test_learning_memory_flags_missed_draw_pattern(tmp_path: Path) -> None:
 
 
 def test_learning_memory_deduplicates_repeated_same_group_match_outcomes(tmp_path: Path) -> None:
-    store = JsonlPredictionStore(tmp_path, timezone_name="America/Bogota")
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
     match = Match(
         match_id="13",
         kickoff=None,

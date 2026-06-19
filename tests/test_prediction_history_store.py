@@ -1,20 +1,22 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from mundialera.domain.models import (
     Match,
     Prediction,
+    PredictionOutcome,
     ProbabilityProfile,
     Scoreline,
     SubmissionResult,
     Team,
 )
-from mundialera.infrastructure.local_store.history import JsonlPredictionStore
+from mundialera.infrastructure.local_store.history import SqlitePredictionStore
 
 
 def test_prediction_store_persists_probability_profile_and_decision_flags(tmp_path: Path) -> None:
-    store = JsonlPredictionStore(tmp_path, timezone_name="America/Bogota")
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
     match = Match(match_id="1", kickoff=None, home=Team("A"), away=Team("B"), group="G")
     profile = ProbabilityProfile(
         home_win=0.31,
@@ -50,12 +52,84 @@ def test_prediction_store_persists_probability_profile_and_decision_flags(tmp_pa
 
     assert loaded.probabilities == profile
     assert loaded.decision_flags == ["draw-risk-covered-in-hedge"]
+    assert store.database_path.name == "pmundialera.sqlite3"
 
 
 def test_prediction_store_persists_tournament_state_memory(tmp_path: Path) -> None:
-    store = JsonlPredictionStore(tmp_path, timezone_name="America/Bogota")
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
 
-    store.write_tournament_state_memory("# state\n- Canadá: P1 W1")
+    store.write_tournament_state_memory("# state\n- Canada: P1 W1")
 
-    assert store.load_tournament_state_memory() == "# state\n- Canadá: P1 W1"
-    assert store.tournament_state_path.name == "tournament-state.md"
+    assert store.load_tournament_state_memory() == "# state\n- Canada: P1 W1"
+    assert store.tournament_state_path == store.database_path
+
+
+def test_prediction_store_persists_outcomes_idempotently(tmp_path: Path) -> None:
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
+    outcome = PredictionOutcome(
+        record_id="record-1",
+        settled_at=datetime.fromisoformat("2026-06-18T12:00:00-05:00"),
+        group="Mundial CoreX",
+        match_id="1",
+        match_label="A - B",
+        predicted=Scoreline(2, 1),
+        actual=Scoreline(2, 1),
+        points=10,
+        exact_ok=True,
+        winner_ok=True,
+        home_goals_ok=True,
+        away_goals_ok=True,
+        goal_diff_ok=True,
+    )
+
+    inserted = store.record_outcomes([outcome, outcome])
+
+    assert inserted == 1
+    assert store.load_outcomes() == [outcome]
+
+
+def test_prediction_store_migrates_legacy_files_to_sqlite(tmp_path: Path) -> None:
+    (tmp_path / "predictions.jsonl").write_text(
+        (
+            '{"record_id":"legacy-1","created_at":"2026-06-18T10:00:00-05:00",'
+            '"group":"Mundial CoreX","match_id":"1","match_label":"A - B",'
+            '"kickoff":null,"primary":{"home":2,"away":1},"hedge":{"home":1,"away":1},'
+            '"submitted_scoreline":{"home":2,"away":1},"confidence":0.61,'
+            '"rationale":["legacy"],"submitted":true,"dry_run":false,'
+            '"submission_message":"legacy","probabilities":{"home_win":0.5,"draw":0.25,'
+            '"away_win":0.25,"over_2_5":0.45,"both_teams_to_score":0.5,'
+            '"expected_home_goals":1.5,"expected_away_goals":1.0},'
+            '"decision_flags":["legacy-flag"]}\n'
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "outcomes.jsonl").write_text(
+        (
+            '{"record_id":"legacy-1","settled_at":"2026-06-18T12:00:00-05:00",'
+            '"group":"Mundial CoreX","match_id":"1","match_label":"A - B",'
+            '"predicted":{"home":2,"away":1},"actual":{"home":2,"away":1},'
+            '"points":10,"exact_ok":true,"winner_ok":true,"home_goals_ok":true,'
+            '"away_goals_ok":true,"goal_diff_ok":true}\n'
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "learning-memory.md").write_text("# learning\n- keep calibration", encoding="utf-8")
+    (tmp_path / "tournament-state.md").write_text("# state\n- A: P1 W1", encoding="utf-8")
+
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
+
+    loaded_record = store.load_prediction_records()[0]
+    assert loaded_record.record_id == "legacy-1"
+    assert loaded_record.probabilities == ProbabilityProfile(
+        home_win=0.5,
+        draw=0.25,
+        away_win=0.25,
+        over_2_5=0.45,
+        both_teams_to_score=0.5,
+        expected_home_goals=1.5,
+        expected_away_goals=1.0,
+    )
+    assert loaded_record.decision_flags == ["legacy-flag"]
+    assert store.load_outcomes()[0].record_id == "legacy-1"
+    assert store.load_learning_memory() == "# learning\n- keep calibration"
+    assert store.load_tournament_state_memory() == "# state\n- A: P1 W1"

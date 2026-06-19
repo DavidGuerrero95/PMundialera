@@ -141,9 +141,9 @@ La tarea de Windows usa el mismo flujo con `--submit`; si no hay partido dentro
 de la ventana, no escribe nada.
 
 El watcher tambien ejecuta retroalimentacion en cada ciclo: compara predicciones
-enviadas contra resultados ya publicados, actualiza `.pmundialera/outcomes.jsonl`
-y regenera `.pmundialera/learning-memory.md`. Esa memoria entra en el siguiente
-prompt de Codex.
+enviadas contra resultados ya publicados, actualiza la base
+`.pmundialera/pmundialera.sqlite3` y regenera la memoria de aprendizaje dentro de
+esa misma base. Esa memoria entra en el siguiente prompt de Codex.
 
 La automatizacion de Windows no consulta cada minuto cuando no hay ventana activa:
 primero lee los horarios de GolPredictor, calcula el proximo despertar antes de la

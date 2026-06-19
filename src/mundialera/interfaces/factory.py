@@ -13,7 +13,7 @@ from mundialera.infrastructure.golpredictor.client import (
     GolPredictorClient,
     GolPredictorCredentials,
 )
-from mundialera.infrastructure.local_store.history import JsonlPredictionStore
+from mundialera.infrastructure.local_store.history import SqlitePredictionStore
 from mundialera.infrastructure.research.web_search import (
     DuckDuckGoSearchClient,
     WebSearchResearchAgent,
@@ -31,9 +31,9 @@ def build_golpredictor_client(settings: Settings | None = None) -> GolPredictorC
     )
 
 
-def build_prediction_store(settings: Settings | None = None) -> JsonlPredictionStore:
+def build_prediction_store(settings: Settings | None = None) -> SqlitePredictionStore:
     resolved = settings or get_settings()
-    return JsonlPredictionStore(
+    return SqlitePredictionStore(
         Path(resolved.pmundialera_data_dir),
         timezone_name=resolved.pmundialera_timezone,
     )
@@ -78,7 +78,7 @@ def build_research_agent(settings: Settings | None = None) -> ResearchAgent:
     return default_research_agent(extra_research_agents)
 
 
-def _combined_prediction_memory(store: JsonlPredictionStore) -> str:
+def _combined_prediction_memory(store: SqlitePredictionStore) -> str:
     sections = [
         item
         for item in (store.load_learning_memory(), store.load_tournament_state_memory())
