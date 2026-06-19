@@ -484,6 +484,8 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         - estado de equipos del mismo grupo si esta mapeado
         - prior global compacto del torneo: goles, empate, over y BTTS
         - no uses estado detallado de selecciones ajenas al partido o al grupo
+        - no uses listas globales de ataques calientes, defensas fragiles,
+          open_profile o BTTS global como evidencia directa de este partido
 
         ```markdown
         {learning_memory}
@@ -518,6 +520,8 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         - Usa `probability_profile` como resumen de esa matriz, no como cinco
           estimaciones independientes.
         - No conviertas incertidumbre general en empate por defecto.
+        - No conviertas incertidumbre general en un marcador bucket como 2-1 o
+          1-0. El marcador debe salir de la matriz y del EP, no de una plantilla.
         - Usa empate solo con evidencia concreta: mercado de empate, perfil under,
           bloque bajo, porteros fuertes o baja conversion.
         - Si ranking, mercado, forma y techo ofensivo alinean a un favorito,
@@ -533,6 +537,9 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
           `nominal_home`, sede, anfitrion, publico, viaje y superficie.
         - No extrapoles tendencias fuertes a partir de un solo partido; aplica
           regularizacion hacia fuerza previa, mercado y ELO.
+        - Si un favorito claro enfrenta un rival con defensa muy fragil, no lo
+          comprimas automaticamente a BTTS; baja el gol esperado del rival salvo
+          evidencia especifica de ataque, portero rival debil o partido abierto.
         - No inventes hechos no soportados; si falta informacion, reflejalo en
           `evidence_gaps` y baja `confidence`.
         - `confidence` representa la probabilidad calibrada de la clase 1X2

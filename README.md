@@ -249,6 +249,14 @@ En eliminatorias los pesos se duplican. El `primary` guardado es el marcador con
 mayor punto esperado, no necesariamente el marcador exacto modal; `hedge` cubre
 una incertidumbre real con EP competitivo.
 
+El perfil probabilistico aplica regularizacion para evitar sobreentrenar un
+marcador bucket como `2-1`. Los priors globales de torneo, listas de ataques
+calientes, defensas fragiles u `open_profile` no suben por si solos el BTTS/over
+de un partido; solo pesan cuando la evidencia pertenece a los dos equipos, su
+grupo o un dato compacto de torneo. Si un favorito claro enfrenta un rival con
+estado defensivo muy debil, el xG rival se reduce antes de optimizar EP para no
+forzar ambos equipos anotan por inercia.
+
 Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 
 ```json

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import replace
+import re
+from dataclasses import dataclass, replace
 
 from mundialera.application.score_distribution import (
     best_scoreline_by_expected_points,
@@ -17,10 +18,6 @@ OVER_TERMS = (
     "both teams",
     "ambos anotan",
     "high scoring",
-    "open_profile",
-    "open match rate",
-    "hot attacks",
-    "leaky defenses",
 )
 UNDER_TERMS = (
     "under",
@@ -129,6 +126,22 @@ TEAM_STRENGTH_PRIORS = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class TeamStateSnapshot:
+    played: int
+    goals_for: int
+    goals_against: int
+    goal_difference: int
+
+    @property
+    def avg_goals_for(self) -> float:
+        return self.goals_for / max(self.played, 1)
+
+    @property
+    def avg_goals_against(self) -> float:
+        return self.goals_against / max(self.played, 1)
+
+
 def enrich_probability_profile(brief: ResearchBrief) -> ResearchBrief:
     if brief.probability_profile is not None:
         return brief
@@ -140,16 +153,25 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
     quality = brief.calibration.evidence_quality if brief.calibration else 0.0
     draw_risk = brief.calibration.draw_risk if brief.calibration else 0.25
     favorite_bias = brief.calibration.favorite_bias_risk if brief.calibration else 0.0
-    diff = _class_gap_diff(brief) + (_base_team_diff(brief) * 0.20)
+    strength_gap = _team_strength_gap(brief)
+    diff = (strength_gap * 0.55) + (_base_team_diff(brief) * 0.12)
 
     if any(term in corpus for term in HOME_FAVORITE_TERMS):
         diff += 0.22
     if any(term in corpus for term in AWAY_FAVORITE_TERMS):
         diff -= 0.22
-    diff *= 1.0 - (favorite_bias * 0.16)
+    favorite_bias_discount = 0.08 if abs(strength_gap) >= 0.20 else 0.16
+    diff *= 1.0 - (favorite_bias * favorite_bias_discount)
 
     over_hits = _term_hits(corpus, OVER_TERMS)
     under_hits = _term_hits(corpus, UNDER_TERMS)
+    home_state = _team_state_snapshot(corpus, brief.match.home.name)
+    away_state = _team_state_snapshot(corpus, brief.match.away.name)
+    state_home_xg, state_away_xg, state_total = _state_xg_adjustments(
+        home_state,
+        away_state,
+        strength_gap,
+    )
     total_goals = _clamp(
         2.48
         + over_hits * 0.12
@@ -160,8 +182,9 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
         1.45,
         3.65,
     )
-    expected_home = _clamp(total_goals / 2 + diff * 1.35, 0.25, 3.5)
-    expected_away = _clamp(total_goals - expected_home, 0.25, 3.5)
+    total_goals = _clamp(total_goals + state_total, 1.45, 3.65)
+    expected_home = _clamp(total_goals / 2 + diff * 1.35 + state_home_xg, 0.25, 3.5)
+    expected_away = _clamp(total_goals - expected_home + state_away_xg, 0.25, 3.5)
     return coherent_profile_from_expected_goals(
         round(expected_home, 2),
         round(expected_away, 2),
@@ -196,10 +219,106 @@ def _base_team_diff(brief: ResearchBrief) -> float:
     return ((digest[0] / 255) - (digest[1] / 255)) * 0.22
 
 
-def _class_gap_diff(brief: ResearchBrief) -> float:
-    home = TEAM_STRENGTH_PRIORS.get(brief.match.home.name.casefold(), 0.50)
-    away = TEAM_STRENGTH_PRIORS.get(brief.match.away.name.casefold(), 0.50)
-    return (home - away) * 0.55
+def _team_strength_gap(brief: ResearchBrief) -> float:
+    return _team_strength(brief.match.home.name) - _team_strength(brief.match.away.name)
+
+
+def _team_strength(team_name: str) -> float:
+    normalized = team_name.casefold()
+    if normalized in TEAM_STRENGTH_PRIORS:
+        return TEAM_STRENGTH_PRIORS[normalized]
+    normalized = (
+        normalized.replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ñ", "n")
+    )
+    return TEAM_STRENGTH_PRIORS.get(normalized, 0.50)
+
+
+def _team_state_snapshot(corpus: str, team_name: str) -> TeamStateSnapshot | None:
+    pattern = re.compile(
+        rf"{re.escape(team_name.casefold())}\s*:\s*"
+        r"p\s*(?P<played>\d+).*?"
+        r"gf\s*(?P<gf>\d+)\s*,?\s*"
+        r"ga\s*(?P<ga>\d+)\s*,?\s*"
+        r"gd\s*(?P<gd>[+-]?\d+)",
+        re.DOTALL,
+    )
+    match = pattern.search(corpus)
+    if match is None:
+        return None
+    return TeamStateSnapshot(
+        played=int(match.group("played")),
+        goals_for=int(match.group("gf")),
+        goals_against=int(match.group("ga")),
+        goal_difference=int(match.group("gd")),
+    )
+
+
+def _state_xg_adjustments(
+    home_state: TeamStateSnapshot | None,
+    away_state: TeamStateSnapshot | None,
+    strength_gap: float,
+) -> tuple[float, float, float]:
+    home_xg = 0.0
+    away_xg = 0.0
+    total = 0.0
+
+    if home_state is not None:
+        if home_state.avg_goals_for >= 3.0:
+            home_xg += 0.16
+            total += 0.04
+        if home_state.avg_goals_for >= 5.0 or home_state.goal_difference >= 5:
+            home_xg += 0.24
+            total += 0.08
+        if home_state.avg_goals_against >= 2.5:
+            away_xg += 0.14
+            total += 0.04
+        if home_state.avg_goals_against <= 0.5 and home_state.played >= 1:
+            away_xg -= 0.10
+        if home_state.goal_difference >= 4:
+            home_xg += 0.08
+        if home_state.goal_difference <= -4:
+            home_xg -= 0.10
+            away_xg += 0.12
+
+    if away_state is not None:
+        if away_state.avg_goals_for >= 3.0:
+            away_xg += 0.16
+            total += 0.04
+        if away_state.avg_goals_for >= 5.0 or away_state.goal_difference >= 5:
+            away_xg += 0.24
+            total += 0.08
+        if away_state.avg_goals_against >= 2.5:
+            home_xg += 0.14
+            total += 0.04
+        if away_state.avg_goals_against <= 0.5 and away_state.played >= 1:
+            home_xg -= 0.10
+        if away_state.goal_difference >= 4:
+            away_xg += 0.08
+        if away_state.goal_difference <= -4:
+            away_xg -= 0.10
+            home_xg += 0.12
+
+    if strength_gap >= 0.22 and away_state is not None:
+        if away_state.avg_goals_against >= 3.0 or away_state.goal_difference <= -4:
+            home_xg += 0.18
+            away_xg -= 0.18
+        if away_state.avg_goals_against >= 5.0 or away_state.goal_difference <= -5:
+            home_xg += 0.28
+            total += 0.08
+    if strength_gap <= -0.22 and home_state is not None:
+        if home_state.avg_goals_against >= 3.0 or home_state.goal_difference <= -4:
+            away_xg += 0.18
+            home_xg -= 0.18
+        if home_state.avg_goals_against >= 5.0 or home_state.goal_difference <= -5:
+            away_xg += 0.28
+            total += 0.08
+
+    return home_xg, away_xg, total
 
 
 def _corpus(brief: ResearchBrief) -> str:

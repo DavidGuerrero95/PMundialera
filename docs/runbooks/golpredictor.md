@@ -103,6 +103,10 @@ Prompt context must stay scoped: use the two match teams, same-group state when
 mapped, and compact global tournament priors. Do not inject detailed state for
 unrelated teams, global hot-attack lists, global leaky-defense lists, generic xG
 explainers, search failures, or research tasks as football evidence.
+Prediction calibration must also avoid repeated bucket defaults. A `2-1`, `1-0`,
+or any other common scoreline is valid only when the scoreline distribution and
+GolPredictor expected-points optimizer select it. Global open/BTTS tempo is a
+weak prior, not direct evidence for both teams to score in a specific match.
 
 ## Pre-submit verification
 

@@ -54,6 +54,11 @@ For knockout rounds the weights double, but the same maximization rule applies.
 The primary prediction is the highest-EP scoreline, not necessarily the modal
 exact score. Confidence represents the calibrated probability of the selected
 primary 1X2 class, not generic document quality.
+Do not let uncertainty collapse into a repeated score bucket such as `2-1` or
+`1-0`. If those scorelines win, they must win through the distribution and EP,
+not because they are a generic football default. Compact global tournament priors
+must remain weak; global open-profile, hot-attack, or leaky-defense lists are not
+direct BTTS/over evidence unless they describe one of the two match teams.
 
 Use learning memory as a weak prior, especially with small samples; do not
 memorize one-off team results or overfit a single settled match.

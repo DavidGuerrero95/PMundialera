@@ -114,6 +114,61 @@ def test_probability_profile_supports_stronger_away_favorite() -> None:
     assert scoreline.away > scoreline.home
 
 
+def test_probability_profile_uses_leaky_underdog_state_without_defaulting_to_two_one() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("Ecuador"), away=Team("Curazao"))
+    brief = calibrate_research_brief(
+        ResearchBrief(
+            match=match,
+            structured_evidence=[
+                _evidence(
+                    EvidenceCategory.RECENT_MATCH_STATS,
+                    (
+                        "Ecuador: P1 W0 D0 L1, GF 0, GA 1, GD -1. "
+                        "Curazao: P1 W0 D0 L1, GF 1, GA 7, GD -6."
+                    ),
+                ),
+                _evidence(
+                    EvidenceCategory.RANKING,
+                    "Ecuador has the higher squad-quality prior and attacking ceiling.",
+                ),
+            ],
+        )
+    )
+
+    profile = build_probability_profile(brief)
+    scoreline = scoreline_from_profile(profile)
+
+    assert profile.home_win >= 0.75
+    assert profile.expected_away_goals <= 0.50
+    assert scoreline == Scoreline(2, 0)
+
+
+def test_global_tournament_open_terms_do_not_inflate_match_total() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("A"), away=Team("B"))
+    baseline = calibrate_research_brief(ResearchBrief(match=match))
+    global_only = calibrate_research_brief(
+        ResearchBrief(
+            match=match,
+            structured_evidence=[
+                _evidence(
+                    EvidenceCategory.RECENT_MATCH_STATS,
+                    (
+                        "Global prior only: open_profile, open match rate, "
+                        "hot attacks, leaky defenses."
+                    ),
+                ),
+            ],
+        )
+    )
+
+    baseline_profile = build_probability_profile(baseline)
+    global_profile = build_probability_profile(global_only)
+
+    assert global_profile.expected_home_goals <= baseline_profile.expected_home_goals + 0.05
+    assert global_profile.expected_away_goals <= baseline_profile.expected_away_goals + 0.05
+    assert global_profile.over_2_5 <= baseline_profile.over_2_5 + 0.03
+
+
 def test_portfolio_hedge_preserves_winner_when_over_profile_is_not_draw_led() -> None:
     profile = ProbabilityProfile(
         home_win=0.38,
