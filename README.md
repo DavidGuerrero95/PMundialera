@@ -256,6 +256,9 @@ de un partido; solo pesan cuando la evidencia pertenece a los dos equipos, su
 grupo o un dato compacto de torneo. Si un favorito claro enfrenta un rival con
 estado defensivo muy debil, el xG rival se reduce antes de optimizar EP para no
 forzar ambos equipos anotan por inercia.
+Cuando mercado, ranking y calidad de plantel marcan superioridad clara, esos
+gaps bajan la confianza pero no borran el margen: el perfil puede abrirse a
+`2-0`, `0-2` u otros márgenes de dos goles si el xG del underdog queda bajo.
 
 Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 

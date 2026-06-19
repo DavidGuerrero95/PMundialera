@@ -59,6 +59,10 @@ Do not let uncertainty collapse into a repeated score bucket such as `2-1` or
 not because they are a generic football default. Compact global tournament priors
 must remain weak; global open-profile, hot-attack, or leaky-defense lists are not
 direct BTTS/over evidence unless they describe one of the two match teams.
+When market, ranking, squad quality, and attacking ceiling align behind a clear
+favorite, missing secondary categories should lower confidence but must not erase
+the margin signal by default. Evaluate two-goal favorite margins when the
+underdog xG is low and the evidence describes clear superiority.
 
 Use learning memory as a weak prior, especially with small samples; do not
 memorize one-off team results or overfit a single settled match.

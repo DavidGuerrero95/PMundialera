@@ -526,6 +526,10 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
           bloque bajo, porteros fuertes o baja conversion.
         - Si ranking, mercado, forma y techo ofensivo alinean a un favorito,
           prefiere victoria por 1-2 goles aunque existan gaps secundarios.
+        - Si la superioridad es notoria y esta respaldada por mercado/ranking/
+          calidad de plantel, no reduzcas automaticamente el analisis a victoria
+          minima: evalua 2-0, 0-2, 3-0, 0-3 o margen de dos goles si la matriz
+          y el underdog xG lo permiten.
         - Si `draw_risk` o `favorite_bias_risk` son altos, no uses marcadores comodos
           del favorito sin justificar calidad de tiro, portero, balon parado y conversion.
         - El hedge no es empate automatico: es una segunda boleta de portafolio.

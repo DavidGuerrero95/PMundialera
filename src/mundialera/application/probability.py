@@ -31,6 +31,44 @@ UNDER_TERMS = (
 )
 HOME_FAVORITE_TERMS = ("home favorite", "local favorito", "favorito local")
 AWAY_FAVORITE_TERMS = ("away favorite", "visitante favorito", "favorito visitante")
+FAVORITE_SIGNAL_TERMS = (
+    "favorite",
+    "favorito",
+    "favorita",
+    "favorece",
+    "market",
+    "mercado",
+    "odds",
+    "cuotas",
+    "ranking",
+    "higher ranked",
+    "mejor ranking",
+    "superior",
+    "superioridad",
+    "squad quality",
+    "calidad de plantel",
+    "calidad plantel",
+)
+STRONG_FAVORITE_TERMS = (
+    "clear favorite",
+    "strong favorite",
+    "heavy favorite",
+    "favorito claro",
+    "favorito fuerte",
+    "superioridad notoria",
+    "large ranking gap",
+    "brecha de ranking",
+    "ranking gap",
+)
+UNDERDOG_SIGNAL_TERMS = (
+    "underdog",
+    "no favorita",
+    "no favorito",
+    "sin ser favorita",
+    "sin ser favorito",
+    "not favorite",
+    "not favourite",
+)
 TEAM_STRENGTH_PRIORS = {
     "argentina": 0.92,
     "francia": 0.90,
@@ -59,8 +97,8 @@ TEAM_STRENGTH_PRIORS = {
     "norway": 0.68,
     "senegal": 0.66,
     "austria": 0.65,
-    "marruecos": 0.64,
-    "morocco": 0.64,
+    "marruecos": 0.68,
+    "morocco": 0.68,
     "estados unidos": 0.63,
     "united states": 0.63,
     "mexico": 0.62,
@@ -77,8 +115,8 @@ TEAM_STRENGTH_PRIORS = {
     "turkey": 0.57,
     "ghana": 0.55,
     "paraguay": 0.55,
-    "escocia": 0.54,
-    "scotland": 0.54,
+    "escocia": 0.52,
+    "scotland": 0.52,
     "tunez": 0.53,
     "túnez": 0.53,
     "tunisia": 0.53,
@@ -93,8 +131,8 @@ TEAM_STRENGTH_PRIORS = {
     "republica checa": 0.50,
     "república checa": 0.50,
     "czech republic": 0.50,
-    "canada": 0.49,
-    "canadá": 0.49,
+    "canada": 0.56,
+    "canadá": 0.56,
     "australia": 0.48,
     "bosnia-herzegovina": 0.47,
     "bosnia": 0.47,
@@ -103,8 +141,8 @@ TEAM_STRENGTH_PRIORS = {
     "south africa": 0.46,
     "arabia saudita": 0.45,
     "saudi arabia": 0.45,
-    "catar": 0.44,
-    "qatar": 0.44,
+    "catar": 0.40,
+    "qatar": 0.40,
     "nueva zelanda": 0.43,
     "new zealand": 0.43,
     "panama": 0.42,
@@ -155,6 +193,8 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
     favorite_bias = brief.calibration.favorite_bias_risk if brief.calibration else 0.0
     strength_gap = _team_strength_gap(brief)
     diff = (strength_gap * 0.55) + (_base_team_diff(brief) * 0.12)
+    explicit_favorite_diff = _explicit_favorite_diff(brief, _signal_corpus(brief))
+    diff += explicit_favorite_diff
 
     if any(term in corpus for term in HOME_FAVORITE_TERMS):
         diff += 0.22
@@ -172,6 +212,11 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
         away_state,
         strength_gap,
     )
+    dominance_home_xg, dominance_away_xg, dominance_total = _dominance_xg_adjustments(
+        explicit_favorite_diff,
+        strength_gap,
+        favorite_bias,
+    )
     total_goals = _clamp(
         2.48
         + over_hits * 0.12
@@ -182,9 +227,17 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
         1.45,
         3.65,
     )
-    total_goals = _clamp(total_goals + state_total, 1.45, 3.65)
-    expected_home = _clamp(total_goals / 2 + diff * 1.35 + state_home_xg, 0.25, 3.5)
-    expected_away = _clamp(total_goals - expected_home + state_away_xg, 0.25, 3.5)
+    total_goals = _clamp(total_goals + state_total + dominance_total, 1.45, 3.65)
+    expected_home = _clamp(
+        total_goals / 2 + diff * 1.35 + state_home_xg + dominance_home_xg,
+        0.25,
+        3.5,
+    )
+    expected_away = _clamp(
+        total_goals - expected_home + state_away_xg + dominance_away_xg,
+        0.25,
+        3.5,
+    )
     return coherent_profile_from_expected_goals(
         round(expected_home, 2),
         round(expected_away, 2),
@@ -236,6 +289,81 @@ def _team_strength(team_name: str) -> float:
         .replace("ñ", "n")
     )
     return TEAM_STRENGTH_PRIORS.get(normalized, 0.50)
+
+
+def _explicit_favorite_diff(brief: ResearchBrief, corpus: str) -> float:
+    home_score = _team_signal_score(
+        corpus,
+        brief.match.home.name,
+        FAVORITE_SIGNAL_TERMS,
+        strong_terms=STRONG_FAVORITE_TERMS,
+    )
+    away_score = _team_signal_score(
+        corpus,
+        brief.match.away.name,
+        FAVORITE_SIGNAL_TERMS,
+        strong_terms=STRONG_FAVORITE_TERMS,
+    )
+    home_underdog = _team_signal_score(corpus, brief.match.home.name, UNDERDOG_SIGNAL_TERMS)
+    away_underdog = _team_signal_score(corpus, brief.match.away.name, UNDERDOG_SIGNAL_TERMS)
+    score = home_score - away_score - home_underdog + away_underdog
+    return _clamp(score * 0.14, -0.34, 0.34)
+
+
+def _team_signal_score(
+    corpus: str,
+    team_name: str,
+    terms: tuple[str, ...],
+    *,
+    strong_terms: tuple[str, ...] = (),
+) -> float:
+    normalized_corpus = _normalize_text(corpus)
+    normalized_team = _normalize_text(team_name)
+    if normalized_team not in normalized_corpus:
+        return 0.0
+    score = 0.0
+    segments = re.split(r"[\n.;]| - ", normalized_corpus)
+    for segment in segments:
+        if normalized_team not in segment:
+            continue
+        for term in terms:
+            if _near_team(segment, normalized_team, _normalize_text(term)):
+                score += 1.0
+        for term in strong_terms:
+            if _near_team(segment, normalized_team, _normalize_text(term)):
+                score += 1.5
+    return min(score, 3.0)
+
+
+def _near_team(corpus: str, team: str, term: str) -> bool:
+    forward_window = 90
+    backward_window = 35
+    if re.search(
+        rf"{re.escape(term)}.{{0,45}}\b(over|sobre|contra|against|vs)\s+{re.escape(team)}",
+        corpus,
+    ):
+        return False
+    before = re.search(rf"{re.escape(team)}.{{0,{forward_window}}}{re.escape(term)}", corpus)
+    after = re.search(rf"{re.escape(term)}.{{0,{backward_window}}}{re.escape(team)}", corpus)
+    return before is not None or after is not None
+
+
+def _normalize_text(value: str) -> str:
+    return (
+        value.casefold()
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ñ", "n")
+        .replace("ã¡", "a")
+        .replace("ã©", "e")
+        .replace("ã­", "i")
+        .replace("ã³", "o")
+        .replace("ãº", "u")
+        .replace("ã±", "n")
+    )
 
 
 def _team_state_snapshot(corpus: str, team_name: str) -> TeamStateSnapshot | None:
@@ -321,11 +449,37 @@ def _state_xg_adjustments(
     return home_xg, away_xg, total
 
 
+def _dominance_xg_adjustments(
+    explicit_favorite_diff: float,
+    strength_gap: float,
+    favorite_bias: float,
+) -> tuple[float, float, float]:
+    signal = explicit_favorite_diff + (strength_gap * 0.45)
+    if abs(signal) < 0.18:
+        return 0.0, 0.0, 0.0
+    dominance = _clamp((abs(signal) - 0.12) * 1.35, 0.0, 0.55)
+    dominance *= 1.0 - min(favorite_bias, 0.85) * 0.22
+    total = min(0.14, dominance * 0.24)
+    underdog_reduction = dominance * 0.46
+    if signal > 0:
+        return dominance, -underdog_reduction, total
+    return -underdog_reduction, dominance, total
+
+
 def _corpus(brief: ResearchBrief) -> str:
     parts = [
         *brief.evidence,
         *brief.uncertainty,
         *[item.title for item in brief.structured_evidence],
+        *[item.summary for item in brief.structured_evidence],
+    ]
+    return " ".join(parts).casefold()
+
+
+def _signal_corpus(brief: ResearchBrief) -> str:
+    parts = [
+        *brief.evidence,
+        *brief.uncertainty,
         *[item.summary for item in brief.structured_evidence],
     ]
     return " ".join(parts).casefold()

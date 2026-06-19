@@ -143,6 +143,73 @@ def test_probability_profile_uses_leaky_underdog_state_without_defaulting_to_two
     assert scoreline == Scoreline(2, 0)
 
 
+def test_clear_home_favorite_can_expand_margin_beyond_narrow_win() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("Canada"), away=Team("Qatar"))
+    brief = calibrate_research_brief(
+        ResearchBrief(
+            match=match,
+            structured_evidence=[
+                _evidence(
+                    EvidenceCategory.RECENT_MATCH_STATS,
+                    (
+                        "Canada: P1 W0 D1 L0, GF 1, GA 1, GD 0. "
+                        "Qatar: P1 W0 D0 L1, GF 0, GA 2, GD -2."
+                    ),
+                ),
+                _evidence(
+                    EvidenceCategory.RANKING,
+                    (
+                        "Canada clear favorite by market, ranking gap, "
+                        "superioridad notoria and squad quality over Qatar."
+                    ),
+                ),
+            ],
+        )
+    )
+
+    profile = build_probability_profile(brief)
+    scoreline = scoreline_from_profile(profile)
+
+    assert profile.home_win >= 0.75
+    assert profile.expected_home_goals >= 2.0
+    assert profile.expected_away_goals <= 0.60
+    assert scoreline == Scoreline(2, 0)
+
+
+def test_clear_away_favorite_can_expand_margin_beyond_narrow_win() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("Escocia"), away=Team("Marruecos"))
+    brief = calibrate_research_brief(
+        ResearchBrief(
+            match=match,
+            structured_evidence=[
+                _evidence(
+                    EvidenceCategory.RECENT_MATCH_STATS,
+                    (
+                        "Escocia: P1 W1 D0 L0, GF 1, GA 0, GD +1. "
+                        "Marruecos: P1 W0 D1 L0, GF 1, GA 1, GD 0."
+                    ),
+                ),
+                _evidence(
+                    EvidenceCategory.RANKING,
+                    (
+                        "Marruecos clear favorite by market, higher ranked, "
+                        "ranking gap, superioridad notoria and squad quality. "
+                        "Escocia sin ser favorita."
+                    ),
+                ),
+            ],
+        )
+    )
+
+    profile = build_probability_profile(brief)
+    scoreline = scoreline_from_profile(profile)
+
+    assert profile.away_win >= 0.70
+    assert profile.expected_away_goals >= 2.0
+    assert profile.expected_home_goals <= 0.80
+    assert scoreline == Scoreline(0, 2)
+
+
 def test_global_tournament_open_terms_do_not_inflate_match_total() -> None:
     match = Match(match_id="1", kickoff=None, home=Team("A"), away=Team("B"))
     baseline = calibrate_research_brief(ResearchBrief(match=match))

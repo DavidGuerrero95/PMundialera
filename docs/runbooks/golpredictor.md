@@ -107,6 +107,10 @@ Prediction calibration must also avoid repeated bucket defaults. A `2-1`, `1-0`,
 or any other common scoreline is valid only when the scoreline distribution and
 GolPredictor expected-points optimizer select it. Global open/BTTS tempo is a
 weak prior, not direct evidence for both teams to score in a specific match.
+Clear market/ranking/squad-quality superiority should affect margin, not only
+confidence. Missing lineups, goalkeeper detail, or set pieces reduce certainty,
+but they should not automatically compress a clear favorite into a 1-goal result
+when the underdog xG is low.
 
 ## Pre-submit verification
 
