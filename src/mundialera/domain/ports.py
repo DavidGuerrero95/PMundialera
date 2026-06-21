@@ -55,6 +55,11 @@ class PredictionRecorder(Protocol):
         """Return learning memory to include in future predictions."""
 
 
+class PredictionSubmissionRegistry(Protocol):
+    def has_successful_submission(self, group_name: str, match_id: str) -> bool:
+        """Return whether a real successful submission is already recorded."""
+
+
 class ResearchRecorder(Protocol):
     def record_research_brief(self, brief: ResearchBrief) -> None:
         """Persist the complete research and analysis context for a match."""

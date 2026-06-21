@@ -61,6 +61,50 @@ def test_prediction_store_persists_probability_profile_and_decision_flags(tmp_pa
     assert store.database_path.name == "pmundialera.sqlite3"
 
 
+def test_prediction_store_detects_successful_real_submission(tmp_path: Path) -> None:
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
+    match = Match(
+        match_id="34",
+        kickoff=None,
+        home=Team("Ecuador"),
+        away=Team("Curazao"),
+        group="G",
+    )
+    prediction = Prediction(
+        match=match,
+        primary=Scoreline(1, 0),
+        hedge=Scoreline(1, 0),
+        confidence=0.61,
+        rationale=["test"],
+    )
+
+    store.record_prediction(
+        prediction,
+        SubmissionResult(
+            match=match,
+            scoreline=prediction.primary,
+            submitted=False,
+            dry_run=True,
+            message="dry-run",
+        ),
+    )
+    assert not store.has_successful_submission("G", "34")
+
+    store.record_prediction(
+        prediction,
+        SubmissionResult(
+            match=match,
+            scoreline=prediction.primary,
+            submitted=True,
+            dry_run=False,
+            message="submitted",
+        ),
+    )
+
+    assert store.has_successful_submission("G", "34")
+    assert not store.has_successful_submission("Other", "34")
+
+
 def test_prediction_store_persists_tournament_state_memory(tmp_path: Path) -> None:
     store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
 

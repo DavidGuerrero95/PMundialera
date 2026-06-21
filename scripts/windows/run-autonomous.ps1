@@ -18,9 +18,51 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+try {
+    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+    $OutputEncoding = [System.Text.UTF8Encoding]::new()
+} catch {
+    Write-Output "Unable to force UTF-8 console output: $($_.Exception.Message)"
+}
 $mutexName = "Local\PMundialeraAutonomousWatch"
 $mutex = New-Object System.Threading.Mutex($false, $mutexName)
 $hasLock = $false
+$heartbeatFile = $null
+
+function Write-PMundialeraHeartbeat {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Status,
+
+        [int] $Cycle = 0,
+
+        [object] $Schedule = $null,
+
+        [string] $Message = ""
+    )
+
+    if (-not $heartbeatFile) {
+        return
+    }
+
+    $payload = [ordered]@{
+        updated_at = (Get-Date).ToString("o")
+        status = $Status
+        cycle = $Cycle
+        mode = $Mode
+        repo_root = $RepoRoot
+        message = $Message
+    }
+    if ($null -ne $Schedule) {
+        $payload.in_window = $Schedule.in_window
+        $payload.sleep_seconds = $Schedule.sleep_seconds
+        $payload.reason = $Schedule.reason
+        $payload.next_match = $Schedule.next_match
+    }
+    $payload |
+        ConvertTo-Json -Depth 8 |
+        Set-Content -LiteralPath $heartbeatFile -Encoding UTF8
+}
 
 function Invoke-PMundialeraPython {
     param(
@@ -48,8 +90,8 @@ function Invoke-PMundialeraPython {
             throw "Timed out after $TimeoutSeconds seconds: python $($Arguments -join ' ')"
         }
 
-        $stdoutText = Get-Content -LiteralPath $stdout.FullName -Raw -ErrorAction SilentlyContinue
-        $stderrText = Get-Content -LiteralPath $stderr.FullName -Raw -ErrorAction SilentlyContinue
+        $stdoutText = Get-Content -LiteralPath $stdout.FullName -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+        $stderrText = Get-Content -LiteralPath $stderr.FullName -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
         if ($stdoutText) {
             Write-Output $stdoutText.TrimEnd()
         }
@@ -77,6 +119,10 @@ try {
     $logDir = Join-Path $RepoRoot ".logs"
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
     $logFile = Join-Path $logDir ("autonomous-watch-{0}.log" -f (Get-Date -Format "yyyyMMdd"))
+    $dataDir = Join-Path $RepoRoot ".pmundialera"
+    New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+    $heartbeatFile = Join-Path $dataDir "watch-heartbeat.json"
+    Write-PMundialeraHeartbeat -Status "starting" -Message "Autonomous watch acquired mutex."
 
     Start-Transcript -Path $logFile -Append | Out-Null
     try {
@@ -103,6 +149,7 @@ try {
             $cycle += 1
             $schedule = $null
             Write-Output ("[{0}] PMundialera cycle {1} starting." -f (Get-Date -Format "s"), $cycle)
+            Write-PMundialeraHeartbeat -Status "cycle_start" -Cycle $cycle
             try {
                 $scheduleOutput = Invoke-PMundialeraPython `
                     -Arguments @(
@@ -125,6 +172,7 @@ try {
                     $schedule.reason,
                     $nextMatch
                 )
+                Write-PMundialeraHeartbeat -Status "schedule_ok" -Cycle $cycle -Schedule $schedule
 
                 if ($schedule.in_window) {
                     if ($Mode -eq "submit") {
@@ -145,8 +193,16 @@ try {
                         (Get-Date -Format "s")
                     )
                 }
+                Invoke-PMundialeraPython `
+                    -Arguments @(
+                        "-m", "mundialera.interfaces.cli", "run", "audit",
+                        "--json"
+                    ) `
+                    -TimeoutSeconds $CycleTimeoutSeconds
+                Write-PMundialeraHeartbeat -Status "cycle_ok" -Cycle $cycle -Schedule $schedule
             } catch {
                 Write-Output ("[{0}] PMundialera cycle {1} failed: {2}" -f (Get-Date -Format "s"), $cycle, $_.Exception.Message)
+                Write-PMundialeraHeartbeat -Status "cycle_failed" -Cycle $cycle -Schedule $schedule -Message $_.Exception.Message
             }
 
             if ($Iterations -gt 0 -and $cycle -ge $Iterations) {
@@ -157,9 +213,11 @@ try {
                 $sleepSeconds = [int] $schedule.sleep_seconds
             }
             Write-Output ("[{0}] Sleeping {1} seconds." -f (Get-Date -Format "s"), $sleepSeconds)
+            Write-PMundialeraHeartbeat -Status "sleeping" -Cycle $cycle -Schedule $schedule
             Start-Sleep -Seconds $sleepSeconds
         }
     } finally {
+        Write-PMundialeraHeartbeat -Status "stopping" -Cycle $cycle -Message "Autonomous watch leaving main loop."
         Stop-Transcript | Out-Null
     }
 } finally {

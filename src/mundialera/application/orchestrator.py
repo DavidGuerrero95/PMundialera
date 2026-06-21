@@ -11,6 +11,7 @@ from mundialera.domain.ports import (
     PredictionModel,
     PredictionRecorder,
     PredictionSink,
+    PredictionSubmissionRegistry,
     ResearchAgent,
     ResearchRecorder,
 )
@@ -35,6 +36,7 @@ class PredictionOrchestrator:
         submission_window_minutes: int,
         recorder: PredictionRecorder | None = None,
         research_recorder: ResearchRecorder | None = None,
+        submission_registry: PredictionSubmissionRegistry | None = None,
     ) -> None:
         self._fixtures = fixtures
         self._research_agent = research_agent
@@ -45,6 +47,7 @@ class PredictionOrchestrator:
         self._prediction_cache: dict[str, Prediction] = {}
         self._recorder = recorder
         self._research_recorder = research_recorder
+        self._submission_registry = submission_registry
 
     def predict_match(self, match: Match) -> Prediction:
         cache_key = _prediction_cache_key(match)
@@ -63,13 +66,24 @@ class PredictionOrchestrator:
         submissions: list[SubmissionResult] = []
         skipped: list[str] = []
 
-        for match in self._fixtures.list_matches(group_name):
+        for raw_match in self._fixtures.list_matches(group_name):
+            match = replace(raw_match, group=raw_match.group or group_name)
             if match.kickoff is None:
                 skipped.append(f"{match.label}: kickoff unavailable")
                 continue
 
             delta = match.kickoff - now
             if timedelta() <= delta <= self._window:
+                if (
+                    not dry_run
+                    and self._submission_registry is not None
+                    and self._submission_registry.has_successful_submission(
+                        group_name,
+                        match.match_id,
+                    )
+                ):
+                    skipped.append(f"{match.label}: already submitted for {group_name}")
+                    continue
                 prediction = self.predict_match(match)
                 predictions.append(prediction)
                 submission = self._sink.submit_prediction(

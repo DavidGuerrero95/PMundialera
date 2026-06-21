@@ -26,7 +26,12 @@ from mundialera.domain.models import (
     SourceTier,
     SubmissionResult,
 )
-from mundialera.domain.ports import PredictionHistory, PredictionRecorder, ResearchRecorder
+from mundialera.domain.ports import (
+    PredictionHistory,
+    PredictionRecorder,
+    PredictionSubmissionRegistry,
+    ResearchRecorder,
+)
 
 SCHEMA_VERSION = 5
 
@@ -167,7 +172,12 @@ SIGNAL_TERMS: dict[str, tuple[str, ...]] = {
 }
 
 
-class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHistory):
+class SqlitePredictionStore(
+    PredictionRecorder,
+    PredictionSubmissionRegistry,
+    ResearchRecorder,
+    PredictionHistory,
+):
     def __init__(self, base_dir: Path, *, timezone_name: str) -> None:
         self._base_dir = base_dir
         self._timezone = ZoneInfo(timezone_name)
@@ -205,6 +215,22 @@ class SqlitePredictionStore(PredictionRecorder, ResearchRecorder, PredictionHist
         )
         with self._connect() as connection:
             self._insert_prediction(connection, record)
+
+    def has_successful_submission(self, group_name: str, match_id: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM predictions
+                WHERE group_name = ?
+                  AND match_id = ?
+                  AND submitted = 1
+                  AND dry_run = 0
+                LIMIT 1
+                """,
+                (group_name, match_id),
+            ).fetchone()
+        return row is not None
 
     def record_research_brief(self, brief: ResearchBrief) -> None:
         match = brief.match

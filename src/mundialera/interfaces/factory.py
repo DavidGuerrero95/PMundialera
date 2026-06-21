@@ -187,6 +187,7 @@ def build_orchestrator(settings: Settings | None = None) -> PredictionOrchestrat
         submission_window_minutes=resolved.pmundialera_submission_window_minutes,
         recorder=store,
         research_recorder=store,
+        submission_registry=store,
     )
 
 

@@ -44,6 +44,11 @@ Register and start immediately:
 .\scripts\windows\register-autostart-task.ps1 -Mode submit -IntervalSeconds 60 -StartNow
 ```
 
+The scheduled task is the production mechanism. It registers both a logon
+trigger and a 15-minute watchdog trigger. `run-autonomous.ps1` holds a named
+mutex, so the watchdog trigger does not create duplicate workers; it only starts
+the worker again if the hidden PowerShell process died.
+
 If Task Scheduler returns `Access denied`, install the per-user Startup shortcut
 instead:
 
@@ -62,6 +67,10 @@ The task runs `scripts/windows/run-autonomous.ps1`, which:
 - runs each autonomous cycle through a PowerShell watchdog so a hung Python call is
   killed after `-CycleTimeoutSeconds` and the next interval can continue
 - settles completed predictions and updates learning memory every cycle
+- skips real submissions that already have a successful local submission record
+- writes `.pmundialera/watch-heartbeat.json` on start, every cycle, sleep, and stop
+- runs `pmundialera run audit --json` every cycle so recently due matches without
+  local submission coverage are visible in the log
 - writes local logs under `.logs/`
 - uses a named mutex so duplicate watchers do not run
 
@@ -119,6 +128,7 @@ Use these commands before a matchday window:
 pmundialera golpredictor login-check
 pmundialera golpredictor groups
 pmundialera run schedule
+pmundialera run audit --json
 pmundialera run next --limit 4 --json
 pmundialera run once --dry-run --json
 ```
@@ -128,6 +138,24 @@ and `confidence`. For debugging, inspect the local SQLite
 `match_research` row to verify `scoreline_distribution` and
 `expected_points_candidates`. A real `--submit` run still writes only inside the
 configured 35-minute window.
+
+## Submission coverage audit
+
+```powershell
+pmundialera run audit --json
+pmundialera run audit --fail-on-missing
+```
+
+The audit checks configured groups for matches that already entered the
+35-minute submission window inside the recent lookback window, which defaults to
+36 hours. Status values:
+
+- `missing_submission`: no successful local submission and no visible platform prediction
+- `platform_prediction_without_local_record`: GolPredictor has a prediction but
+  SQLite does not have a matching successful submission record
+
+This command is intended to catch the operational failure mode where the watcher
+process dies before a late match window opens.
 
 ## Feedback loop
 

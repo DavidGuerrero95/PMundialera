@@ -57,6 +57,14 @@ class FakeSink:
         return result
 
 
+class FakeSubmissionRegistry:
+    def __init__(self, submitted_match_ids: set[tuple[str, str]]) -> None:
+        self._submitted_match_ids = submitted_match_ids
+
+    def has_successful_submission(self, group_name: str, match_id: str) -> bool:
+        return (group_name, match_id) in self._submitted_match_ids
+
+
 class FixedPredictionModel:
     def predict(self, brief: ResearchBrief) -> Prediction:
         return Prediction(
@@ -152,6 +160,61 @@ def test_run_group_window_uses_primary_for_all_groups() -> None:
     assert corex.submitted[0].scoreline == corex.evaluated[0].primary
     assert fifa.submitted[0].scoreline == fifa.evaluated[0].primary
     assert fifa.submitted[0].scoreline == corex.submitted[0].scoreline
+
+
+def test_run_group_window_skips_real_submission_already_recorded() -> None:
+    tz = ZoneInfo("America/Bogota")
+    now = datetime(2026, 6, 20, 18, 30, tzinfo=tz)
+    match = Match(
+        match_id="34",
+        kickoff=now + timedelta(minutes=15),
+        home=Team("Ecuador"),
+        away=Team("Curazao"),
+    )
+    sink = FakeSink()
+    orchestrator = PredictionOrchestrator(
+        fixtures=FakeFixtures([match]),
+        research_agent=RecordingResearchAgent(),
+        prediction_model=FixedPredictionModel(),
+        sink=sink,
+        clock=FakeClock(now),
+        submission_window_minutes=35,
+        submission_registry=FakeSubmissionRegistry({("Mundial CoreX", "34")}),
+    )
+
+    result = orchestrator.run_group_window("Mundial CoreX", dry_run=False)
+
+    assert result.evaluated == []
+    assert result.submitted == []
+    assert sink.submissions == []
+    assert result.skipped == ["Ecuador - Curazao: already submitted for Mundial CoreX"]
+
+
+def test_run_group_window_dry_run_ignores_submission_registry() -> None:
+    tz = ZoneInfo("America/Bogota")
+    now = datetime(2026, 6, 20, 18, 30, tzinfo=tz)
+    match = Match(
+        match_id="34",
+        kickoff=now + timedelta(minutes=15),
+        home=Team("Ecuador"),
+        away=Team("Curazao"),
+    )
+    sink = FakeSink()
+    orchestrator = PredictionOrchestrator(
+        fixtures=FakeFixtures([match]),
+        research_agent=RecordingResearchAgent(),
+        prediction_model=FixedPredictionModel(),
+        sink=sink,
+        clock=FakeClock(now),
+        submission_window_minutes=35,
+        submission_registry=FakeSubmissionRegistry({("Mundial CoreX", "34")}),
+    )
+
+    result = orchestrator.run_group_window("Mundial CoreX", dry_run=True)
+
+    assert len(result.evaluated) == 1
+    assert len(result.submitted) == 1
+    assert result.submitted[0].dry_run is True
 
 
 def test_predict_match_records_research_brief_before_prediction() -> None:

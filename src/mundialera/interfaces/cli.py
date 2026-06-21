@@ -11,6 +11,10 @@ from rich.table import Table
 
 from mundialera.application.clock import SystemClock
 from mundialera.application.scheduler import plan_next_wake
+from mundialera.application.submission_audit import (
+    SubmissionCoverageIssue,
+    audit_submission_coverage,
+)
 from mundialera.domain.models import Match, Prediction, Team
 from mundialera.interfaces.factory import (
     build_feedback_service,
@@ -303,6 +307,58 @@ def run_schedule(
     )
 
 
+@run_app.command("audit")
+def run_audit(
+    json_output: Annotated[bool, typer.Option("--json", help="Print JSON result")] = False,
+    fail_on_missing: Annotated[
+        bool,
+        typer.Option("--fail-on-missing", help="Exit with code 2 when coverage issues exist"),
+    ] = False,
+    lookback_hours: Annotated[
+        int,
+        typer.Option(help="Only audit matches with kickoff inside this recent-hour window"),
+    ] = 36,
+) -> None:
+    settings = get_settings()
+    client = build_golpredictor_client(settings)
+    store = build_prediction_store(settings)
+    try:
+        issues = audit_submission_coverage(
+            settings.configured_groups(),
+            fixtures=client,
+            submission_registry=store,
+            now=SystemClock(settings.pmundialera_timezone).now(),
+            submission_window_minutes=settings.pmundialera_submission_window_minutes,
+            lookback_hours=lookback_hours,
+        )
+    finally:
+        client.close()
+    payload = {
+        "issues": [_coverage_issue_to_dict(issue) for issue in issues],
+        "issue_count": len(issues),
+        "groups": settings.configured_groups(),
+        "database": str(store.database_path),
+    }
+    if json_output:
+        _print_json(payload)
+    else:
+        if not issues:
+            console.print("[green]Submission coverage OK[/green]")
+        for issue in issues:
+            platform_prediction = (
+                issue.platform_prediction.label() if issue.platform_prediction is not None else "-"
+            )
+            console.print(
+                "[yellow]"
+                f"{issue.status}: {issue.group_name} | {issue.match_label} | "
+                f"{issue.kickoff.isoformat()} | platform={platform_prediction}"
+                "[/yellow]"
+            )
+        console.print(f"SQLite database: {payload['database']}")
+    if fail_on_missing and issues:
+        raise typer.Exit(code=2)
+
+
 def _prediction_to_dict(prediction: Prediction) -> dict[str, object]:
     return {
         "match_id": prediction.match.match_id,
@@ -313,6 +369,20 @@ def _prediction_to_dict(prediction: Prediction) -> dict[str, object]:
         "probabilities": _probabilities_to_dict(prediction),
         "decision_flags": prediction.decision_flags,
         "rationale": prediction.rationale,
+    }
+
+
+def _coverage_issue_to_dict(issue: SubmissionCoverageIssue) -> dict[str, object]:
+    platform_prediction = issue.platform_prediction
+    return {
+        "group": issue.group_name,
+        "match_id": issue.match_id,
+        "match": issue.match_label,
+        "kickoff": issue.kickoff.isoformat(),
+        "status": issue.status,
+        "platform_prediction": platform_prediction.label()
+        if platform_prediction is not None
+        else None,
     }
 
 

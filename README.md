@@ -121,6 +121,12 @@ Registrar y arrancar de una vez:
 .\scripts\windows\register-autostart-task.ps1 -Mode submit -IntervalSeconds 60 -StartNow
 ```
 
+La tarea programada es el mecanismo recomendado para produccion: ademas del
+inicio de sesion, instala un disparador periodico cada 15 minutos. Como el
+runner usa mutex, ese disparador no duplica procesos; solo revive el watcher si
+Windows cerro el PowerShell oculto, la sesion cambio de estado o el proceso
+termino inesperadamente.
+
 Si Task Scheduler devuelve `Acceso denegado`, instala el arranque automatico
 por la carpeta Startup del usuario:
 
@@ -158,7 +164,25 @@ esa misma base. Esa memoria entra en el siguiente prompt de Codex.
 La automatizacion de Windows no consulta cada minuto cuando no hay ventana activa:
 primero lee los horarios de GolPredictor, calcula el proximo despertar antes de la
 ventana de 35 minutos y duerme hasta ese momento. Dentro de una ventana activa usa
-el intervalo corto configurado.
+el intervalo corto configurado. El runner escribe un heartbeat local en
+`.pmundialera/watch-heartbeat.json` y ejecuta una auditoria de cobertura para
+detectar partidos recientes que ya entraron en ventana sin envio registrado.
+
+Auditar cobertura de envios recientes:
+
+```powershell
+pmundialera run audit --json
+```
+
+La auditoria revisa por defecto las ultimas 36 horas. Si un partido ya entro en
+ventana y no tiene envio real en SQLite ni pronostico visible en GolPredictor,
+aparece como `missing_submission`. Si GolPredictor muestra pronostico pero no
+hay registro local, aparece como `platform_prediction_without_local_record`.
+
+Para evitar reenvios repetidos, un `run once --submit` salta cualquier
+partido/grupo que ya tenga un envio real exitoso en
+`.pmundialera/pmundialera.sqlite3`, salvo que se borre o corrija manualmente ese
+registro.
 
 Ver estado de aprendizaje:
 
