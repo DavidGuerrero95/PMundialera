@@ -21,5 +21,6 @@ def test_predict_command_returns_auditable_probability_payload(monkeypatch) -> N
     payload = json.loads(result.stdout)
     assert payload["match"] == "A - B"
     assert "primary" in payload
+    assert "hedge" not in payload
     assert "confidence" in payload
     assert payload["probabilities"]["draw"] >= 0.0

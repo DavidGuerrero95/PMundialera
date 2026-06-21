@@ -95,9 +95,8 @@ Before submission, the application derives an auditable probability profile
 for home/draw/away, over 2.5, both-teams-to-score, and expected goals from a
 single scoreline distribution. The final primary is the scoreline that maximizes
 GolPredictor expected points, not necessarily the modal exact score. Decision
-guardrails cap confidence and reduce unsupported favorite margins; draw hedges
-are used only when draw probability and expected points compete with the primary
-class.
+guardrails cap confidence and reduce unsupported favorite margins. The same
+primary scoreline is submitted for every configured group.
 
 Prompt context must stay scoped: use the two match teams, same-group state when
 mapped, and compact global tournament priors. Do not inject detailed state for
@@ -125,7 +124,7 @@ pmundialera run once --dry-run --json
 ```
 
 The JSON preview should include `probabilities`, `decision_flags`, `primary`,
-`hedge`, and `confidence`. For debugging, inspect the local SQLite
+and `confidence`. For debugging, inspect the local SQLite
 `match_research` row to verify `scoreline_distribution` and
 `expected_points_candidates`. A real `--submit` run still writes only inside the
 configured 35-minute window.

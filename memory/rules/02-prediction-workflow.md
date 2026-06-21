@@ -80,20 +80,17 @@ secondary evidence categories are incomplete.
 
 Before submission, apply decision guardrails that cap confidence for weak
 evidence and reduce unsupported comfortable favorite margins.
-The hedge is a portfolio pick, not an automatic draw. Prefer the next
-competitive expected-points candidate that covers an identifiable uncertainty in
-winner, total, BTTS, or margin. Use draw hedge only when draw probability and
-expected points compete with the primary class, or when a high BTTS/over profile
-specifically supports a high-scoring draw.
+All configured GolPredictor groups must submit the same primary scoreline. Do
+not submit a secondary scoreline to a separate group.
 
 ## Final engine
 
 The platform collects and structures context. The configured prediction engine
 explains the football evidence and risk, but deterministic application code
-selects the final primary and hedge from the scoreline distribution whenever a
-probability profile is available. The preferred engine is Codex CLI via
-`codex exec -`, with a strict JSON response contract and heuristic fallback only
-when Codex is unavailable or returns invalid output.
+selects the final primary from the scoreline distribution whenever a probability
+profile is available. The preferred engine is Codex CLI via `codex exec -`, with
+a strict one-scoreline JSON response contract and heuristic fallback only when
+Codex is unavailable or returns invalid output.
 
 ## Feedback loop
 

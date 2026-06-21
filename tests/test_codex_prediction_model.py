@@ -32,7 +32,6 @@ def test_codex_cli_prediction_model_parses_json_response(tmp_path: Path) -> None
         "_ = sys.stdin.read()\n"
         "print(json.dumps({"
         "'primary': {'home': 2, 'away': 1}, "
-        "'hedge': {'home': 1, 'away': 1}, "
         "'confidence': 0.71, "
         "'rationale': ['better squad availability'], "
         "'risk_flags': ['late lineup change']"
@@ -53,7 +52,7 @@ def test_codex_cli_prediction_model_parses_json_response(tmp_path: Path) -> None
     prediction = model.predict(ResearchBrief(match=match, evidence=["news"], uncertainty=[]))
 
     assert prediction.primary.label() == "2 - 1"
-    assert prediction.hedge.label() == "1 - 1"
+    assert prediction.hedge == prediction.primary
     assert prediction.confidence == 0.71
     assert prediction.rationale[0] == "Codex CLI prediction engine."
 
@@ -132,7 +131,8 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert '"probability_profile"' in prompt
     assert '"scoreline_distribution"' in prompt
     assert '"expected_points_candidates"' in prompt
-    assert '"optimized_scorelines"' in prompt
+    assert '"optimized_scoreline"' in prompt
+    assert "hedge" not in prompt
     assert '"pool_scoring"' in prompt
     assert '"coverage"' in prompt
     assert '"facts"' in prompt
@@ -168,6 +168,7 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert "Usa `scoreline_distribution` como unica matriz coherente" in prompt
     assert "expected_points_candidates" in prompt
     assert "maximiza los puntos" in prompt
+    assert "unico marcador exacto primario" in prompt
     assert "estado de los dos equipos del partido" in prompt
     assert "# PMundialera tournament state" in prompt
     assert "No metas errores tecnicos ni tareas de investigacion como evidencia" in prompt

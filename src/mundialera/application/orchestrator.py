@@ -33,7 +33,6 @@ class PredictionOrchestrator:
         sink: PredictionSink,
         clock: Clock,
         submission_window_minutes: int,
-        hedge_group_names: set[str] | None = None,
         recorder: PredictionRecorder | None = None,
         research_recorder: ResearchRecorder | None = None,
     ) -> None:
@@ -43,7 +42,6 @@ class PredictionOrchestrator:
         self._sink = sink
         self._clock = clock
         self._window = timedelta(minutes=submission_window_minutes)
-        self._hedge_group_names = hedge_group_names or set()
         self._prediction_cache: dict[str, Prediction] = {}
         self._recorder = recorder
         self._research_recorder = research_recorder
@@ -74,14 +72,9 @@ class PredictionOrchestrator:
             if timedelta() <= delta <= self._window:
                 prediction = self.predict_match(match)
                 predictions.append(prediction)
-                scoreline = (
-                    prediction.hedge
-                    if group_name.casefold() in self._hedge_group_names
-                    else prediction.primary
-                )
                 submission = self._sink.submit_prediction(
                     match,
-                    scoreline,
+                    prediction.primary,
                     dry_run=dry_run,
                 )
                 submissions.append(submission)

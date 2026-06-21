@@ -127,7 +127,7 @@ def test_run_group_window_only_predicts_inside_window() -> None:
     ]
 
 
-def test_run_group_window_uses_hedge_for_configured_group() -> None:
+def test_run_group_window_uses_primary_for_all_groups() -> None:
     tz = ZoneInfo("America/Bogota")
     now = datetime(2026, 6, 15, 13, 45, tzinfo=tz)
     match = Match(
@@ -144,14 +144,14 @@ def test_run_group_window_uses_hedge_for_configured_group() -> None:
         sink=sink,
         clock=FakeClock(now),
         submission_window_minutes=20,
-        hedge_group_names={"mundial fifa 2026"},
     )
 
     corex = orchestrator.run_group_window("Mundial CoreX", dry_run=True)
     fifa = orchestrator.run_group_window("Mundial FIFA 2026", dry_run=True)
 
     assert corex.submitted[0].scoreline == corex.evaluated[0].primary
-    assert fifa.submitted[0].scoreline == fifa.evaluated[0].hedge
+    assert fifa.submitted[0].scoreline == fifa.evaluated[0].primary
+    assert fifa.submitted[0].scoreline == corex.submitted[0].scoreline
 
 
 def test_predict_match_records_research_brief_before_prediction() -> None:

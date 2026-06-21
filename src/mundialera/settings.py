@@ -25,10 +25,6 @@ class Settings(BaseSettings):
         default="Mundial CoreX,Mundial FIFA 2026",
         validation_alias="GOLPREDICTOR_GROUPS",
     )
-    golpredictor_hedge_groups: str = Field(
-        default="Mundial FIFA 2026",
-        validation_alias="GOLPREDICTOR_HEDGE_GROUPS",
-    )
     pmundialera_timezone: str = Field(
         default="America/Bogota",
         validation_alias="PMUNDIALERA_TIMEZONE",
@@ -101,13 +97,6 @@ class Settings(BaseSettings):
 
     def configured_groups(self) -> list[str]:
         return [group.strip() for group in self.golpredictor_groups.split(",") if group.strip()]
-
-    def hedge_groups(self) -> set[str]:
-        return {
-            group.strip().casefold()
-            for group in self.golpredictor_hedge_groups.split(",")
-            if group.strip()
-        }
 
     def require_golpredictor_credentials(self) -> tuple[str, str]:
         if not self.golpredictor_username or not self.golpredictor_password:

@@ -1,6 +1,6 @@
 # Prediction calibrator
 
-Owns scoreline calibration, confidence, and hedge prediction selection.
+Owns scoreline calibration, confidence, and primary prediction selection.
 
 ## Responsibilities
 
@@ -9,8 +9,6 @@ Owns scoreline calibration, confidence, and hedge prediction selection.
   from that same distribution.
 - Select `primary` by maximum GolPredictor expected points, not by modal exact
   score or narrative preference.
-- Select `hedge` as a competitive expected-points alternative that covers a real
-  uncertainty in winner, total, BTTS, or margin.
 - Define `confidence` as the calibrated probability of the selected primary 1X2
   class.
 - Treat draw as evidence-driven only; never use it as the default answer to

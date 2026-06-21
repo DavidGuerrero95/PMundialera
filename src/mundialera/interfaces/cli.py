@@ -113,7 +113,6 @@ def predict(
         {
             "match": match.label,
             "primary": prediction.primary.label(),
-            "hedge": prediction.hedge.label(),
             "confidence": prediction.confidence,
             "probabilities": _probabilities_to_dict(prediction),
             "decision_flags": prediction.decision_flags,
@@ -225,7 +224,7 @@ def run_next(
         for prediction in predictions:
             console.print(
                 f"{prediction['match']}: {prediction['primary']} "
-                f"(hedge {prediction['hedge']}, conf {prediction['confidence']})"
+                f"(conf {prediction['confidence']})"
             )
 
 
@@ -310,7 +309,6 @@ def _prediction_to_dict(prediction: Prediction) -> dict[str, object]:
         "match": prediction.match.label,
         "kickoff": prediction.match.kickoff.isoformat() if prediction.match.kickoff else None,
         "primary": prediction.primary.label(),
-        "hedge": prediction.hedge.label(),
         "confidence": prediction.confidence,
         "probabilities": _probabilities_to_dict(prediction),
         "decision_flags": prediction.decision_flags,

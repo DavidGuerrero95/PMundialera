@@ -13,7 +13,6 @@ from datetime import datetime
 from mundialera.application.score_distribution import (
     best_scoreline_by_expected_points,
     expected_points_payload,
-    hedge_scoreline_by_expected_points,
     result_probability,
     scoreline_distribution_payload,
 )
@@ -342,10 +341,6 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
     if brief.probability_profile is not None:
         candidates = expected_points_payload(brief.probability_profile)
         optimized_primary = best_scoreline_by_expected_points(brief.probability_profile)
-        optimized_hedge = hedge_scoreline_by_expected_points(
-            brief.probability_profile,
-            optimized_primary,
-        )
         context["probability_profile"] = {
             "home_win": brief.probability_profile.home_win,
             "draw": brief.probability_profile.draw,
@@ -359,7 +354,7 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
             brief.probability_profile,
         )
         context["expected_points_candidates"] = candidates
-        context["optimized_scorelines"] = {
+        context["optimized_scoreline"] = {
             "primary": {
                 "home": optimized_primary.home,
                 "away": optimized_primary.away,
@@ -368,17 +363,8 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
                     4,
                 ),
             },
-            "hedge": {
-                "home": optimized_hedge.home,
-                "away": optimized_hedge.away,
-                "confidence_1x2": round(
-                    result_probability(brief.probability_profile, optimized_hedge),
-                    4,
-                ),
-            },
             "selection_rule": (
-                "primary and hedge are deterministically selected by expected "
-                "GolPredictor points"
+                "primary is deterministically selected by expected GolPredictor points"
             ),
         }
     template = textwrap.dedent(
@@ -388,8 +374,9 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         ## Rol
 
         Eres Codex actuando como motor final de prediccion para una polla del Mundial.
-        Debes producir un marcador exacto primario y un marcador hedge con razonamiento
-        probabilistico, calibrado y trazable.
+        Debes producir un unico marcador exacto primario con razonamiento
+        probabilistico, calibrado y trazable. No propongas alternativas
+        secundarias.
 
         ## Evidencia que debes evaluar
 
@@ -508,8 +495,7 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         En fases eliminatorias los pesos se duplican, sin cambiar el criterio
         de seleccion. `expected_points_candidates` ya trae los candidatos
         ordenados por esa funcion. `primary` debe ser el marcador con mayor EP,
-        no necesariamente el marcador exacto modal. `hedge` debe cubrir una
-        incertidumbre real con EP competitivo.
+        no necesariamente el marcador exacto modal.
 
         ## Reglas de decision
 
@@ -532,11 +518,8 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
           y el underdog xG lo permiten.
         - Si `draw_risk` o `favorite_bias_risk` son altos, no uses marcadores comodos
           del favorito sin justificar calidad de tiro, portero, balon parado y conversion.
-        - El hedge no es empate automatico: es una segunda boleta de portafolio.
-        - Si `primary` favorece a un equipo y over/BTTS estan altos, el hedge debe
-          preservar ganador con otro total o margen.
-        - Usa empate como hedge solo cuando compite de verdad con el favorito o cuando
-          BTTS/over extremo justifica un 2-2.
+        - No generes marcador alternativo ni segunda boleta. Todo el analisis
+          debe converger en un unico `primary`.
         - No interpretes `home` como localia real. Usa `venue_context`:
           `nominal_home`, sede, anfitrion, publico, viaje y superficie.
         - No extrapoles tendencias fuertes a partir de un solo partido; aplica
@@ -581,7 +564,6 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         ```json
         {{
           "primary": {{"home": 0, "away": 0}},
-          "hedge": {{"home": 0, "away": 0}},
           "confidence": 0.0,
           "rationale": ["razon 1", "razon 2"],
           "risk_flags": ["riesgo 1"],
@@ -593,8 +575,8 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
 
         - `home` y `away` deben ser goles enteros entre 0 y 9.
         - `confidence` debe estar entre 0 y 1.
-        - `primary` es el marcador a guardar en GolPredictor.
-        - `hedge` es la alternativa si se busca cubrir riesgo.
+        - `primary` es el unico marcador a guardar en GolPredictor.
+        - No incluyas otros marcadores secundarios.
 
         ## Contexto JSON
 
@@ -611,7 +593,7 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
 
 def _prediction_from_payload(brief: ResearchBrief, payload: dict[str, object]) -> Prediction:
     primary = _scoreline_from_payload(payload.get("primary"))
-    hedge = _scoreline_from_payload(payload.get("hedge"))
+    hedge = primary
     confidence_raw = payload.get("confidence")
     if not isinstance(confidence_raw, int | float):
         raise CodexPredictionError("confidence missing or not numeric")
@@ -625,18 +607,13 @@ def _prediction_from_payload(brief: ResearchBrief, payload: dict[str, object]) -
         rationale.append("Gaps de evidencia: " + "; ".join(evidence_gaps))
     if brief.probability_profile is not None:
         optimized_primary = best_scoreline_by_expected_points(brief.probability_profile)
-        optimized_hedge = hedge_scoreline_by_expected_points(
-            brief.probability_profile,
-            optimized_primary,
-        )
-        if optimized_primary != primary or optimized_hedge != hedge:
+        if optimized_primary != primary:
             rationale.append(
                 "Marcadores ajustados por optimizador deterministico de puntos esperados "
-                f"GolPredictor: primary {primary.label()} -> {optimized_primary.label()}, "
-                f"hedge {hedge.label()} -> {optimized_hedge.label()}."
+                f"GolPredictor: primary {primary.label()} -> {optimized_primary.label()}."
             )
         primary = optimized_primary
-        hedge = optimized_hedge
+        hedge = optimized_primary
         confidence = result_probability(brief.probability_profile, primary)
     return Prediction(
         match=brief.match,

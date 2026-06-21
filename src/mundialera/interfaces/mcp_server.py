@@ -64,7 +64,6 @@ def main() -> None:
         return {
             "match": match.label,
             "primary": prediction.primary.label(),
-            "hedge": prediction.hedge.label(),
             "confidence": prediction.confidence,
             "rationale": prediction.rationale,
         }
@@ -78,7 +77,6 @@ def main() -> None:
                 {
                     "match": item.match.label,
                     "primary": item.primary.label(),
-                    "hedge": item.hedge.label(),
                     "confidence": item.confidence,
                 }
                 for item in result.evaluated
@@ -107,7 +105,6 @@ def main() -> None:
                     "match": item.match.label,
                     "kickoff": item.match.kickoff.isoformat() if item.match.kickoff else None,
                     "primary": item.primary.label(),
-                    "hedge": item.hedge.label(),
                     "confidence": item.confidence,
                     "rationale": item.rationale,
                 }

@@ -245,9 +245,9 @@ EP(h,a) = 5 * P(misma clase 1X2)
         + 1 * P(diferencia = h-a)
 ```
 
-En eliminatorias los pesos se duplican. El `primary` guardado es el marcador con
-mayor punto esperado, no necesariamente el marcador exacto modal; `hedge` cubre
-una incertidumbre real con EP competitivo.
+En eliminatorias los pesos se duplican. El `primary` guardado es el unico
+marcador enviado a GolPredictor en todos los grupos, no necesariamente el
+marcador exacto modal.
 
 El perfil probabilistico aplica regularizacion para evitar sobreentrenar un
 marcador bucket como `2-1`. Los priors globales de torneo, listas de ataques
@@ -265,7 +265,6 @@ Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 ```json
 {
   "primary": {"home": 2, "away": 1},
-  "hedge": {"home": 1, "away": 1},
   "confidence": 0.71,
   "rationale": ["razon"],
   "risk_flags": ["riesgo"]
@@ -291,8 +290,6 @@ Antes de guardar o enviar, el orquestador aplica guardrails de decision:
 - limita la confianza cuando la evidencia es baja o faltan categorias criticas
 - reduce marcadores comodos de favorito si no hay soporte de portero, estadistica reciente,
   balon parado y conversion
-- cubre empate en el hedge solo cuando compite con el favorito y no por
-  incertidumbre generica
 - persiste perfil probabilistico, matriz de marcadores, candidatos EP y flags de
   decision en el historico local
 

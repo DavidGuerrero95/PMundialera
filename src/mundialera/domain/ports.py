@@ -29,7 +29,7 @@ class ResearchAgent(Protocol):
 
 class PredictionModel(Protocol):
     def predict(self, brief: ResearchBrief) -> Prediction:
-        """Return primary and hedge scorelines."""
+        """Return the primary scoreline selected for submission."""
 
 
 class PredictionSink(Protocol):
