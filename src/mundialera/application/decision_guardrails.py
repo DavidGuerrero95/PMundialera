@@ -92,6 +92,11 @@ def _chasing_margin_supported(scoreline: Scoreline, brief: ResearchBrief) -> boo
             profile.home_win >= 0.48
             and profile.over_2_5 >= 0.62
             and profile.expected_home_goals >= 1.75
+        ) or (
+            profile.home_win >= 0.45
+            and profile.over_2_5 >= 0.56
+            and profile.both_teams_to_score >= 0.58
+            and profile.expected_home_goals >= 1.60
         )
     return (
         profile.away_win >= 0.72
@@ -101,7 +106,12 @@ def _chasing_margin_supported(scoreline: Scoreline, brief: ResearchBrief) -> boo
         profile.away_win >= 0.48
         and profile.over_2_5 >= 0.62
         and profile.expected_away_goals >= 1.75
-        )
+    ) or (
+        profile.away_win >= 0.45
+        and profile.over_2_5 >= 0.56
+        and profile.both_teams_to_score >= 0.58
+        and profile.expected_away_goals >= 1.60
+    )
 
 
 def _has_margin_support(brief: ResearchBrief) -> bool:

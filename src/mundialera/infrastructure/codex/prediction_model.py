@@ -10,6 +10,7 @@ import textwrap
 from dataclasses import dataclass
 from datetime import datetime
 
+from mundialera.application.pool_strategy import PoolStrategyContext, StrategyMemory
 from mundialera.application.score_distribution import (
     best_scoreline_by_pool_strategy,
     expected_points_payload,
@@ -120,16 +121,30 @@ class CodexCliPredictionModel(PredictionModel):
         *,
         fallback: PredictionModel,
         learning_memory: str = "",
+        pool_context: PoolStrategyContext | None = None,
+        strategy_memory: StrategyMemory | None = None,
     ) -> None:
         self._config = config
         self._fallback = fallback
         self._learning_memory = learning_memory
+        self._pool_context = pool_context or PoolStrategyContext()
+        self._strategy_memory = strategy_memory or StrategyMemory()
 
     def predict(self, brief: ResearchBrief) -> Prediction:
-        prompt = _build_prediction_prompt(brief, learning_memory=self._learning_memory)
+        prompt = _build_prediction_prompt(
+            brief,
+            learning_memory=self._learning_memory,
+            pool_context=self._pool_context,
+            strategy_memory=self._strategy_memory,
+        )
         try:
             payload = self._run_codex(prompt)
-            return _prediction_from_payload(brief, payload)
+            return _prediction_from_payload(
+                brief,
+                payload,
+                pool_context=self._pool_context,
+                strategy_memory=self._strategy_memory,
+            )
         except (CodexPredictionError, OSError, subprocess.SubprocessError) as exc:
             fallback = self._fallback.predict(brief)
             return Prediction(
@@ -187,8 +202,16 @@ def _inject_model_arg(args: list[str], model: str) -> list[str]:
     return [*args[:prompt_index], "--model", model, *args[prompt_index:]]
 
 
-def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> str:
+def _build_prediction_prompt(
+    brief: ResearchBrief,
+    *,
+    learning_memory: str,
+    pool_context: PoolStrategyContext | None = None,
+    strategy_memory: StrategyMemory | None = None,
+) -> str:
     match = brief.match
+    resolved_pool_context = pool_context or PoolStrategyContext()
+    resolved_strategy_memory = strategy_memory or StrategyMemory()
     prompt_memory = _compact_learning_memory_for_match(learning_memory, match_label=match.label)
     star_player_signals = _star_player_signals_from_brief(brief)
     if not star_player_signals:
@@ -294,6 +317,8 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
             },
             "objective": "maximize expected_pool_points, not exact score probability",
         },
+        "pool_context": resolved_pool_context.to_payload(),
+        "strategy_memory": resolved_strategy_memory.to_payload(),
         "evidence": _compact_evidence(brief.evidence),
         "facts": _structured_evidence_payload(brief),
         "structured_evidence": _structured_evidence_payload(brief),
@@ -340,7 +365,11 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         }
     if brief.probability_profile is not None:
         candidates = expected_points_payload(brief.probability_profile)
-        optimized_primary = best_scoreline_by_pool_strategy(brief.probability_profile)
+        optimized_primary = best_scoreline_by_pool_strategy(
+            brief.probability_profile,
+            pool_context=resolved_pool_context,
+            strategy_memory=resolved_strategy_memory,
+        )
         context["probability_profile"] = {
             "home_win": brief.probability_profile.home_win,
             "draw": brief.probability_profile.draw,
@@ -364,7 +393,7 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
                 ),
             },
             "selection_rule": (
-                "primary is deterministically selected by chasing pool strategy"
+                "primary is deterministically selected by aggressive_high pool strategy"
             ),
         }
     template = textwrap.dedent(
@@ -494,10 +523,11 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
 
         En fases eliminatorias los pesos se duplican. `expected_points_candidates`
         ya trae los candidatos ordenados por esa funcion. Como estamos en modo
-        persecucion del pool, `primary` debe partir del mayor EP, pero puede
-        elegir un marcador con mayor margen o total si conserva la misma clase
-        1X2, queda cerca del lider por EP y aumenta upside de marcador exacto,
-        diferencia o goles. No cambies de ganador solo por perseguir.
+        `aggressive_high`, `primary` debe partir del mayor EP, pero puede elegir
+        upside sobre EP puro cuando el candidato esta cerca del lider, conserva
+        soporte probabilistico y mejora margen, total o diferenciacion. No
+        defiendas un marcador conservador solo por menor riesgo. No cambies de
+        ganador sin respaldo probabilistico.
 
         ## Reglas de decision
 
@@ -514,12 +544,16 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
           bloque bajo, porteros fuertes o baja conversion.
         - Si ranking, mercado, forma y techo ofensivo alinean a un favorito,
           prefiere victoria por 1-2 goles aunque existan gaps secundarios.
-        - Modo estrategia actual: persecucion. Estamos en posicion baja del pool;
-          si un marcador de mayor margen o mayor total conserva la misma clase
-          1X2 y queda cerca de `expected_points_candidates[0]`, prefiere el
-          marcador con mayor upside de exacto/margen sobre el marcador minimo.
-          No cambies de ganador solo por perseguir; aumenta riesgo dentro de la
-          misma clase probabilistica.
+        - Modo estrategia actual: `aggressive_high` para remontar en el pool.
+          Usa `pool_context.risk_pressure` y `strategy_memory` como guardrails:
+          si hubo subestimacion reciente de totales o margenes, prefiere mayor
+          total/margen cuando el EP esta cerca; si hubo falsos empates, no uses
+          empate por incertidumbre; si los buckets 1-0, 1-1 o 2-1 se repiten,
+          exige que ganen claramente por EP antes de mantenerlos.
+        - Explica cuando se elige upside sobre EP puro. Si eliges margen amplio,
+          menciona evidencia de xG, forma, rival debil, ranking, mercado o
+          plantel. Si eliges empate o sorpresa, exige valor diferencial y
+          probabilidad cercana a la clase lider.
         - Si la superioridad es notoria y esta respaldada por mercado/ranking/
           calidad de plantel, no reduzcas automaticamente el analisis a victoria
           minima: evalua 2-0, 0-2, 3-0, 0-3 o margen de dos goles si la matriz
@@ -599,7 +633,13 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
     )
 
 
-def _prediction_from_payload(brief: ResearchBrief, payload: dict[str, object]) -> Prediction:
+def _prediction_from_payload(
+    brief: ResearchBrief,
+    payload: dict[str, object],
+    *,
+    pool_context: PoolStrategyContext | None = None,
+    strategy_memory: StrategyMemory | None = None,
+) -> Prediction:
     primary = _scoreline_from_payload(payload.get("primary"))
     hedge = primary
     confidence_raw = payload.get("confidence")
@@ -614,7 +654,11 @@ def _prediction_from_payload(brief: ResearchBrief, payload: dict[str, object]) -
     if evidence_gaps:
         rationale.append("Gaps de evidencia: " + "; ".join(evidence_gaps))
     if brief.probability_profile is not None:
-        optimized_primary = best_scoreline_by_pool_strategy(brief.probability_profile)
+        optimized_primary = best_scoreline_by_pool_strategy(
+            brief.probability_profile,
+            pool_context=pool_context,
+            strategy_memory=strategy_memory,
+        )
         if optimized_primary != primary:
             rationale.append(
                 "Marcadores ajustados por optimizador deterministico de puntos esperados "

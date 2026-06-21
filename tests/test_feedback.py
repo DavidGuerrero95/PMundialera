@@ -5,6 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from mundialera.application.feedback import FeedbackService, build_learning_memory
+from mundialera.application.pool_strategy import strategy_memory_from_json
 from mundialera.domain.models import Match, Prediction, Scoreline, SubmissionResult, Team
 from mundialera.infrastructure.local_store.history import SqlitePredictionStore
 
@@ -66,6 +67,9 @@ def test_feedback_settles_submitted_prediction_and_writes_memory(tmp_path: Path)
     assert outcomes[0].winner_ok is True
     assert outcomes[0].away_goals_ok is False
     assert "Settled predictions: 1" in store.load_learning_memory()
+    strategy_memory = strategy_memory_from_json(store.load_strategy_memory())
+    assert strategy_memory.sample_size == 1
+    assert strategy_memory.under_total_rate == 1.0
 
 
 def test_learning_memory_flags_missed_draw_pattern(tmp_path: Path) -> None:

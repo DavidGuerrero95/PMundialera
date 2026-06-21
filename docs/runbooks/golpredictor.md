@@ -103,9 +103,11 @@ missing evidence categories, and evidence quality.
 Before submission, the application derives an auditable probability profile
 for home/draw/away, over 2.5, both-teams-to-score, and expected goals from a
 single scoreline distribution. The final primary starts from GolPredictor
-expected points, but the current pool strategy is `chasing`: when the account is
-behind the leaderboard, a higher-margin or higher-total score can beat the EP
-leader if it keeps the same 1X2 class and stays close enough in expected points.
+expected points, but the current pool strategy is `aggressive_high`: with the
+account configured as `40/50`, risk pressure is about `0.80`, so a higher-margin,
+higher-total, or differentiated score can beat the EP leader if it stays within
+the configured EP/probability thresholds. Winner changes require a close
+alternative class, no strong favorite, and an open enough match profile.
 Decision guardrails cap confidence and reduce unsupported favorite margins. The
 same primary scoreline is submitted for every configured group.
 
@@ -120,9 +122,10 @@ weak prior, not direct evidence for both teams to score in a specific match.
 Clear market/ranking/squad-quality superiority should affect margin, not only
 confidence. Missing lineups, goalkeeper detail, or set pieces reduce certainty,
 but they should not automatically compress a clear favorite into a 1-goal result
-when the underdog xG is low. In chasing mode, supported favorites can expand to
-3-0 or 0-3 when recent production/form plus ranking, market, or squad quality
-support the margin.
+when the underdog xG is low. In `aggressive_high` mode, supported favorites can
+expand to 3-0 or 0-3 when recent production/form plus ranking, market, or squad
+quality support the margin. Open matches can move from 2-1 to 3-1 or from 1-2 to
+1-3 when EP is close, while 2-2 requires draw, over, and BTTS all live.
 
 ## Pre-submit verification
 
@@ -170,6 +173,7 @@ The local feedback state lives in `.pmundialera/pmundialera.sqlite3`.
 - `match_research`: full research brief captured before each prediction
 - `metadata.learning_memory`: compact lessons injected into future Codex prompts
 - `metadata.tournament_state`: current team/tournament form injected into future research
+- `metadata.strategy_memory`: recent 24-match strategy performance for risk mode
 
 Prediction records include probabilities and guardrail flags so future analysis
 can improve calibration without overfitting to one match. Tournament state is

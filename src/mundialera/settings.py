@@ -72,6 +72,24 @@ class Settings(BaseSettings):
         default="codex",
         validation_alias="PMUNDIALERA_PREDICTION_ENGINE",
     )
+    pmundialera_pool_position: int = Field(
+        default=40,
+        ge=1,
+        validation_alias="PMUNDIALERA_POOL_POSITION",
+    )
+    pmundialera_pool_size: int = Field(
+        default=50,
+        ge=2,
+        validation_alias="PMUNDIALERA_POOL_SIZE",
+    )
+    pmundialera_pool_strategy: str = Field(
+        default="aggressive_high",
+        validation_alias="PMUNDIALERA_POOL_STRATEGY",
+    )
+    pmundialera_strategy_horizon: str = Field(
+        default="tournament",
+        validation_alias="PMUNDIALERA_STRATEGY_HORIZON",
+    )
     pmundialera_codex_executable: str = Field(
         default="codex",
         validation_alias="PMUNDIALERA_CODEX_EXECUTABLE",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime
 
+from mundialera.application.pool_strategy import summarize_recent_performance
 from mundialera.application.tournament_state import build_tournament_state_memory
 from mundialera.domain.models import Match, PredictionOutcome, PredictionRecord, Scoreline
 from mundialera.domain.ports import FixtureRepository
@@ -41,7 +42,9 @@ class FeedbackService:
                     continue
                 outcomes.append(_build_outcome(record, match, self._now))
         count = self._store.record_outcomes(outcomes)
-        self._store.write_learning_memory(build_learning_memory(self._store.load_outcomes()))
+        settled_outcomes = self._store.load_outcomes()
+        self._store.write_learning_memory(build_learning_memory(settled_outcomes))
+        self._store.write_strategy_memory(build_strategy_memory(settled_outcomes, self._now))
         self._store.write_tournament_state_memory(build_tournament_state_memory(all_matches))
         return count
 
@@ -108,6 +111,10 @@ def build_learning_memory(outcomes: list[PredictionOutcome]) -> str:
         ],
     ]
     return "\n".join(lines)
+
+
+def build_strategy_memory(outcomes: list[PredictionOutcome], updated_at: datetime) -> str:
+    return summarize_recent_performance(outcomes, updated_at=updated_at).to_json()
 
 
 def _build_outcome(

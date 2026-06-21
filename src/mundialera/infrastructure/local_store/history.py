@@ -378,6 +378,12 @@ class SqlitePredictionStore(
     def write_tournament_state_memory(self, content: str) -> None:
         self._write_metadata("tournament_state", content.strip())
 
+    def load_strategy_memory(self) -> str:
+        return self._load_metadata("strategy_memory")
+
+    def write_strategy_memory(self, content: str) -> None:
+        self._write_metadata("strategy_memory", content.strip())
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")

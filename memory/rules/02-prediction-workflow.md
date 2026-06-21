@@ -51,11 +51,13 @@ EP(h,a) = 5 * P(same 1X2 class)
 ```
 
 For knockout rounds the weights double. The current leaderboard strategy is
-`chasing` because the account is behind the pool: primary starts from the
-highest-EP scoreline, but may select a higher-margin or higher-total candidate
-when it keeps the same 1X2 class, remains close in EP, and improves exact,
-goal-difference, or goal-count upside. Confidence represents the calibrated
-probability of the selected primary 1X2 class, not generic document quality.
+`aggressive_high` because the account is configured around position `40/50`:
+primary starts from the highest-EP scoreline, but may select a higher-margin,
+higher-total, or strategically differentiated candidate when it stays close in
+EP, keeps enough exact probability, and respects result-class thresholds.
+Winner changes require a close alternative class, no strong favorite, and an
+open enough match profile. Confidence represents the calibrated probability of
+the selected primary 1X2 class, not generic document quality.
 Do not let uncertainty collapse into a repeated score bucket such as `2-1` or
 `1-0`. If those scorelines win, they must win through the distribution and EP,
 not because they are a generic football default. Compact global tournament priors
@@ -68,6 +70,11 @@ the underdog xG is low and the evidence describes clear superiority.
 
 Use learning memory as a weak prior, especially with small samples; do not
 memorize one-off team results or overfit a single settled match.
+Use SQLite `metadata.strategy_memory` as a bounded strategy prior over the last
+24 unique settled matches: raise total/margin upside when recent predictions
+underestimated totals or margins, penalize unsupported draw uncertainty when
+false draws exceed missed draws, and penalize repeated buckets unless EP clearly
+dominates.
 After each settled matchday, persist current tournament state: team form, goals
 for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
 draw/open-match tournament tempo. Inject into the prompt only match-relevant team

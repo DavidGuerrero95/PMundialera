@@ -87,6 +87,39 @@ def test_guardrails_do_not_force_draw_hedge_from_general_uncertainty() -> None:
     assert "draw-risk-covered-in-hedge" not in guarded.decision_flags
 
 
+def test_guardrails_keep_supported_near_open_two_goal_margin() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("Uruguay"), away=Team("Cabo Verde"))
+    brief = ResearchBrief(
+        match=match,
+        calibration=PredictionCalibration(
+            evidence_quality=0.42,
+            draw_risk=0.66,
+            favorite_bias_risk=0.52,
+        ),
+        probability_profile=ProbabilityProfile(
+            home_win=0.4676,
+            draw=0.2392,
+            away_win=0.2932,
+            over_2_5=0.5714,
+            both_teams_to_score=0.5907,
+            expected_home_goals=1.68,
+            expected_away_goals=1.29,
+        ),
+    )
+    prediction = Prediction(
+        match=match,
+        primary=Scoreline(3, 1),
+        hedge=Scoreline(3, 1),
+        confidence=0.47,
+        rationale=["aggressive margin"],
+    )
+
+    guarded = apply_prediction_guardrails(prediction, brief)
+
+    assert guarded.primary == Scoreline(3, 1)
+    assert "comfortable-favorite-reduced-by-evidence-guardrail" not in guarded.decision_flags
+
+
 def test_guardrails_replace_default_draw_hedge_when_over_profile_favors_winner() -> None:
     match = Match(match_id="1", kickoff=None, home=Team("Inglaterra"), away=Team("Croacia"))
     brief = ResearchBrief(

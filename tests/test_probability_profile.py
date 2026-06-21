@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from mundialera.application.calibration import calibrate_research_brief
+from mundialera.application.pool_strategy import StrategyMemory
 from mundialera.application.probability import (
     build_probability_profile,
     draw_hedge_from_profile,
@@ -319,3 +320,154 @@ def test_chasing_strategy_takes_higher_upside_same_result_when_ep_is_close() -> 
 
     assert best_scoreline_by_expected_points(profile) == Scoreline(2, 0)
     assert best_scoreline_by_pool_strategy(profile) == Scoreline(3, 0)
+
+
+def test_aggressive_high_expands_strong_favorite_without_changing_winner() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.82,
+        draw=0.14,
+        away_win=0.04,
+        over_2_5=0.51,
+        both_teams_to_score=0.29,
+        expected_home_goals=2.30,
+        expected_away_goals=0.38,
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(2, 0)
+    assert best_scoreline_by_pool_strategy(profile, strategy="aggressive_high") == Scoreline(3, 0)
+
+
+def test_aggressive_high_expands_open_match_when_ep_is_close() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.48,
+        draw=0.25,
+        away_win=0.27,
+        over_2_5=0.64,
+        both_teams_to_score=0.60,
+        expected_home_goals=1.90,
+        expected_away_goals=1.10,
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(2, 1)
+    assert best_scoreline_by_pool_strategy(profile, strategy="aggressive_high") == Scoreline(3, 1)
+
+
+def test_aggressive_high_allows_two_two_only_when_draw_over_and_btts_are_live() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.34,
+        draw=0.32,
+        away_win=0.34,
+        over_2_5=0.68,
+        both_teams_to_score=0.66,
+        expected_home_goals=1.65,
+        expected_away_goals=1.65,
+    )
+
+    assert best_scoreline_by_pool_strategy(profile, strategy="aggressive_high") == Scoreline(2, 2)
+
+
+def test_aggressive_high_surprise_requires_close_class_and_no_strong_favorite() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.40,
+        draw=0.24,
+        away_win=0.36,
+        over_2_5=0.59,
+        both_teams_to_score=0.56,
+        expected_home_goals=1.28,
+        expected_away_goals=1.32,
+    )
+    memory = StrategyMemory(
+        sample_size=24,
+        bucket_repetition_rate=0.50,
+        repeated_buckets=("1 - 0", "2 - 1"),
+    )
+
+    scoreline = best_scoreline_by_pool_strategy(
+        profile,
+        strategy="aggressive_high",
+        strategy_memory=memory,
+    )
+
+    assert scoreline.away > scoreline.home
+
+
+def test_aggressive_high_does_not_change_winner_against_strong_favorite() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.74,
+        draw=0.18,
+        away_win=0.08,
+        over_2_5=0.64,
+        both_teams_to_score=0.55,
+        expected_home_goals=2.25,
+        expected_away_goals=0.70,
+    )
+
+    scoreline = best_scoreline_by_pool_strategy(profile, strategy="aggressive_high")
+
+    assert scoreline.home > scoreline.away
+
+
+def test_aggressive_high_does_not_take_three_nil_from_generic_market_only_profile() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.70,
+        draw=0.18,
+        away_win=0.12,
+        over_2_5=0.48,
+        both_teams_to_score=0.30,
+        expected_home_goals=1.85,
+        expected_away_goals=0.75,
+    )
+
+    assert best_scoreline_by_pool_strategy(profile, strategy="aggressive_high") != Scoreline(3, 0)
+
+
+def test_aggressive_high_penalizes_repeated_low_bucket_after_underestimation() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.48,
+        draw=0.25,
+        away_win=0.27,
+        over_2_5=0.64,
+        both_teams_to_score=0.60,
+        expected_home_goals=1.90,
+        expected_away_goals=1.10,
+    )
+    memory = StrategyMemory(
+        sample_size=24,
+        under_total_rate=0.58,
+        under_margin_rate=0.54,
+        bucket_repetition_rate=0.50,
+        repeated_buckets=("2 - 1", "1 - 1"),
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(2, 1)
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        strategy="aggressive_high",
+        strategy_memory=memory,
+    ) == Scoreline(3, 1)
+
+
+def test_aggressive_high_memory_allows_near_open_margin_upgrade() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.4652,
+        draw=0.2399,
+        away_win=0.2949,
+        over_2_5=0.5691,
+        both_teams_to_score=0.5893,
+        expected_home_goals=1.67,
+        expected_away_goals=1.29,
+    )
+    memory = StrategyMemory(
+        sample_size=20,
+        under_total_rate=0.60,
+        under_margin_rate=0.60,
+        bucket_repetition_rate=0.50,
+        repeated_buckets=("2 - 1", "1 - 0"),
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(2, 1)
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        strategy="aggressive_high",
+        strategy_memory=memory,
+    ) == Scoreline(3, 1)

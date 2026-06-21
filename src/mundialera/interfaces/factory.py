@@ -6,6 +6,12 @@ from pathlib import Path
 from mundialera.application.clock import SystemClock
 from mundialera.application.feedback import FeedbackService
 from mundialera.application.orchestrator import PredictionOrchestrator
+from mundialera.application.pool_strategy import (
+    PoolStrategyContext,
+    StrategyMemory,
+    build_pool_strategy_context,
+    strategy_memory_from_json,
+)
 from mundialera.application.subagents import HeuristicPredictionModel, default_research_agent
 from mundialera.application.tournament_memory import TournamentMemoryResearchAgent
 from mundialera.domain.models import ResearchRecord
@@ -44,7 +50,12 @@ def build_prediction_store(settings: Settings | None = None) -> SqlitePrediction
 def build_prediction_model(settings: Settings | None = None) -> PredictionModel:
     resolved = settings or get_settings()
     store = build_prediction_store(resolved)
-    heuristic_model = HeuristicPredictionModel()
+    pool_context = _pool_strategy_context(resolved)
+    strategy_memory = _strategy_memory(store)
+    heuristic_model = HeuristicPredictionModel(
+        pool_context=pool_context,
+        strategy_memory=strategy_memory,
+    )
     if resolved.pmundialera_prediction_engine.casefold() != "codex":
         return heuristic_model
     context_memory = _combined_prediction_memory(store)
@@ -57,7 +68,25 @@ def build_prediction_model(settings: Settings | None = None) -> PredictionModel:
         ),
         fallback=heuristic_model,
         learning_memory=context_memory,
+        pool_context=pool_context,
+        strategy_memory=strategy_memory,
     )
+
+
+def _pool_strategy_context(settings: Settings) -> PoolStrategyContext:
+    return build_pool_strategy_context(
+        position=settings.pmundialera_pool_position,
+        pool_size=settings.pmundialera_pool_size,
+        strategy=settings.pmundialera_pool_strategy,
+        horizon=settings.pmundialera_strategy_horizon,
+    )
+
+
+def _strategy_memory(store: SqlitePredictionStore) -> StrategyMemory:
+    try:
+        return strategy_memory_from_json(store.load_strategy_memory())
+    except (TypeError, ValueError):
+        return StrategyMemory()
 
 
 def build_research_agent(settings: Settings | None = None) -> ResearchAgent:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from mundialera.application.pool_strategy import PoolStrategyContext, StrategyMemory
 from mundialera.domain.models import ProbabilityProfile, Scoreline
 
 
@@ -140,12 +141,22 @@ def best_scoreline_by_expected_points(profile: ProbabilityProfile) -> Scoreline:
 def best_scoreline_by_pool_strategy(
     profile: ProbabilityProfile,
     *,
-    strategy: str = "chasing",
+    strategy: str = "aggressive_high",
+    pool_context: PoolStrategyContext | None = None,
+    strategy_memory: StrategyMemory | None = None,
 ) -> Scoreline:
     candidates = expected_points_candidates(profile)
     if not candidates:
         return Scoreline(1, 1)
-    if strategy != "chasing":
+    strategy_name = pool_context.strategy if pool_context is not None else strategy
+    if strategy_name == "aggressive_high":
+        return _aggressive_high_scoreline(
+            profile,
+            candidates,
+            strategy_memory=strategy_memory,
+            risk_pressure=pool_context.risk_pressure if pool_context is not None else 0.80,
+        )
+    if strategy_name != "chasing":
         return candidates[0].scoreline
     return _chasing_scoreline(profile, candidates)
 
@@ -285,6 +296,295 @@ def _chasing_candidate_score(
         candidate_total,
         candidate_margin,
     )
+
+
+def _aggressive_high_scoreline(
+    profile: ProbabilityProfile,
+    candidates: list[ExpectedPointsCandidate],
+    *,
+    strategy_memory: StrategyMemory | None,
+    risk_pressure: float,
+) -> Scoreline:
+    leader = candidates[0]
+    memory = strategy_memory or StrategyMemory()
+    viable = [
+        candidate
+        for candidate in candidates[:36]
+        if _is_aggressive_high_candidate(
+            profile,
+            leader,
+            candidate,
+            strategy_memory=memory,
+        )
+    ]
+    if len(viable) <= 1:
+        return leader.scoreline
+    viable.sort(
+        key=lambda item: _aggressive_candidate_score(
+            profile,
+            leader,
+            item,
+            strategy_memory=memory,
+            risk_pressure=risk_pressure,
+        ),
+        reverse=True,
+    )
+    return viable[0].scoreline
+
+
+def _is_aggressive_high_candidate(
+    profile: ProbabilityProfile,
+    leader: ExpectedPointsCandidate,
+    candidate: ExpectedPointsCandidate,
+    *,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    if candidate == leader:
+        return True
+    if candidate.exact_probability < leader.exact_probability * 0.35:
+        return False
+    if candidate.home > 3 or candidate.away > 3:
+        return False
+    if candidate.home + candidate.away > 4:
+        return False
+    if _is_unsupported_three_goal_shutout(profile, candidate.scoreline):
+        return False
+    if _is_unsupported_comfortable_margin(
+        profile,
+        candidate.scoreline,
+        strategy_memory=strategy_memory,
+    ):
+        return False
+
+    leader_result = _result_class(leader.scoreline)
+    candidate_result = _result_class(candidate.scoreline)
+    draw_ep_bypass = _is_aggressive_draw(profile, candidate.scoreline, strategy_memory)
+    if not draw_ep_bypass and not _close_to_expected_points_leader(leader, candidate):
+        return False
+    strong_favorite = _strong_favorite_class(profile)
+    if strong_favorite is not None and candidate_result != strong_favorite:
+        return False
+    if candidate_result == leader_result:
+        if not _same_class_upside_supported(
+            profile,
+            candidate_result,
+            strategy_memory=strategy_memory,
+        ):
+            return False
+        return _candidate_improves_margin_or_total(leader, candidate)
+    return _can_change_result_class(profile, leader, candidate, strategy_memory=strategy_memory)
+
+
+def _close_to_expected_points_leader(
+    leader: ExpectedPointsCandidate,
+    candidate: ExpectedPointsCandidate,
+) -> bool:
+    return (
+        candidate.expected_pool_points >= leader.expected_pool_points - 0.55
+        or candidate.expected_pool_points >= leader.expected_pool_points * 0.90
+    )
+
+
+def _candidate_improves_margin_or_total(
+    leader: ExpectedPointsCandidate,
+    candidate: ExpectedPointsCandidate,
+) -> bool:
+    return (
+        candidate.home + candidate.away > leader.home + leader.away
+        or abs(candidate.home - candidate.away) > abs(leader.home - leader.away)
+    )
+
+
+def _same_class_upside_supported(
+    profile: ProbabilityProfile,
+    candidate_result: str,
+    *,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    return (
+        _is_open_match(profile)
+        or _strong_favorite_class(profile) == candidate_result
+        or strategy_memory.total_high_pressure
+        or strategy_memory.margin_pressure
+    )
+
+
+def _can_change_result_class(
+    profile: ProbabilityProfile,
+    leader: ExpectedPointsCandidate,
+    candidate: ExpectedPointsCandidate,
+    *,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    leader_class = _result_class(leader.scoreline)
+    candidate_class = _result_class(candidate.scoreline)
+    leader_probability = _class_probability(profile, leader_class)
+    candidate_probability = _class_probability(profile, candidate_class)
+    favorite_probability = max(profile.home_win, profile.away_win)
+    if favorite_probability >= 0.72:
+        return False
+    if abs(candidate_probability - leader_probability) > 0.16:
+        return False
+    if candidate_probability < 0.24:
+        return False
+    if candidate_class == "draw":
+        return _is_aggressive_draw(profile, candidate.scoreline, strategy_memory)
+    if not _is_open_match(profile):
+        return False
+    if candidate.expected_pool_points < leader.expected_pool_points - 0.45:
+        return False
+    if abs(candidate.home - candidate.away) > 1:
+        return False
+    if leader_class != "draw" and candidate_probability < leader_probability:
+        return favorite_probability <= 0.62
+    return True
+
+
+def _aggressive_candidate_score(
+    profile: ProbabilityProfile,
+    leader: ExpectedPointsCandidate,
+    candidate: ExpectedPointsCandidate,
+    *,
+    strategy_memory: StrategyMemory,
+    risk_pressure: float,
+) -> tuple[float, float, int, int, float]:
+    leader_total = leader.home + leader.away
+    candidate_total = candidate.home + candidate.away
+    leader_margin = abs(leader.home - leader.away)
+    candidate_margin = abs(candidate.home - candidate.away)
+    total_delta = max(0, candidate_total - leader_total)
+    margin_delta = max(0, candidate_margin - leader_margin)
+    score = candidate.expected_pool_points
+
+    total_bonus = 0.16 + (0.14 if strategy_memory.total_high_pressure else 0.0)
+    margin_bonus = 0.14 + (0.20 if strategy_memory.margin_pressure else 0.0)
+    total_bonus += risk_pressure * 0.10
+    margin_bonus += risk_pressure * 0.10
+    if _strong_favorite_class(profile) == _result_class(candidate.scoreline):
+        margin_bonus += 0.10
+
+    score += total_delta * total_bonus
+    score += margin_delta * margin_bonus
+
+    if _is_open_match(profile) and _is_open_match_upside(candidate.scoreline):
+        score += 0.28
+    if _is_aggressive_draw(profile, candidate.scoreline, strategy_memory):
+        score += 0.95
+    if _is_low_total_leader(leader.scoreline) and candidate_total >= 3:
+        score += 0.08
+    if _result_class(candidate.scoreline) != _result_class(leader.scoreline):
+        score += risk_pressure * 0.12
+    if _result_class(candidate.scoreline) == "draw" and strategy_memory.draw_penalty_active:
+        score -= 0.26
+    if (
+        strategy_memory.bucket_penalty_active
+        and strategy_memory.is_repeated_bucket(candidate.scoreline)
+        and leader.expected_pool_points - candidate.expected_pool_points <= 0.35
+    ):
+        score -= 0.30
+
+    return (
+        score,
+        candidate.exact_probability,
+        candidate_total,
+        candidate_margin,
+        _class_probability(profile, _result_class(candidate.scoreline)),
+    )
+
+
+def _is_open_match(profile: ProbabilityProfile) -> bool:
+    return profile.over_2_5 >= 0.58 and profile.both_teams_to_score >= 0.55
+
+
+def _is_open_match_upside(scoreline: Scoreline) -> bool:
+    return (scoreline.home, scoreline.away) in {
+        (2, 1),
+        (1, 2),
+        (3, 1),
+        (1, 3),
+        (2, 2),
+    }
+
+
+def _is_low_total_leader(scoreline: Scoreline) -> bool:
+    return (scoreline.home, scoreline.away) in {(1, 0), (0, 1), (1, 1), (2, 1), (1, 2)}
+
+
+def _is_aggressive_draw(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    if scoreline != Scoreline(2, 2):
+        return False
+    return (
+        not strategy_memory.draw_penalty_active
+        and profile.draw >= 0.28
+        and profile.over_2_5 >= 0.60
+        and profile.both_teams_to_score >= 0.58
+    )
+
+
+def _is_unsupported_three_goal_shutout(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+) -> bool:
+    if scoreline == Scoreline(3, 0):
+        return not (
+            profile.home_win >= 0.72
+            and profile.expected_home_goals >= 2.15
+            and profile.expected_away_goals <= 0.75
+        )
+    if scoreline == Scoreline(0, 3):
+        return not (
+            profile.away_win >= 0.72
+            and profile.expected_away_goals >= 2.15
+            and profile.expected_home_goals <= 0.75
+        )
+    return False
+
+
+def _is_unsupported_comfortable_margin(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+    *,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    if abs(scoreline.home - scoreline.away) < 2:
+        return False
+    if _strong_favorite_class(profile) == _result_class(scoreline):
+        return False
+    if (
+        strategy_memory.margin_pressure
+        and profile.over_2_5 >= 0.54
+        and profile.both_teams_to_score >= 0.52
+    ):
+        return False
+    return not _is_open_match(profile)
+
+
+def _strong_favorite_class(profile: ProbabilityProfile) -> str | None:
+    if (
+        profile.home_win >= 0.72
+        and profile.expected_home_goals >= 2.15
+        and profile.expected_away_goals <= 0.75
+    ):
+        return "home"
+    if (
+        profile.away_win >= 0.72
+        and profile.expected_away_goals >= 2.15
+        and profile.expected_home_goals <= 0.75
+    ):
+        return "away"
+    return None
+
+
+def _class_probability(profile: ProbabilityProfile, result: str) -> float:
+    if result == "home":
+        return profile.home_win
+    if result == "away":
+        return profile.away_win
+    return profile.draw
 
 
 def _poisson_pmf(mean: float, goals: int) -> float:

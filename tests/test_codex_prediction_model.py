@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from mundialera.application.pool_strategy import PoolStrategyContext, StrategyMemory
 from mundialera.domain.models import (
     EvidenceCategory,
     EvidenceItem,
@@ -125,6 +126,14 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     prompt = _build_prediction_prompt(
         brief,
         learning_memory="# PMundialera tournament state\n- Average goals: 3.25",
+        pool_context=PoolStrategyContext(position=40, pool_size=50),
+        strategy_memory=StrategyMemory(
+            sample_size=24,
+            under_total_rate=0.58,
+            under_margin_rate=0.54,
+            bucket_repetition_rate=0.50,
+            repeated_buckets=("2 - 1", "1 - 1"),
+        ),
     )
 
     assert '"calibration"' in prompt
@@ -134,6 +143,15 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert '"optimized_scoreline"' in prompt
     assert "hedge" not in prompt
     assert '"pool_scoring"' in prompt
+    assert '"pool_context"' in prompt
+    assert '"position": 40' in prompt
+    assert '"pool_size": 50' in prompt
+    assert '"risk_pressure": 0.7959' in prompt
+    assert '"strategy": "aggressive_high"' in prompt
+    assert '"horizon": "tournament"' in prompt
+    assert '"strategy_memory"' in prompt
+    assert '"under_total_rate": 0.58' in prompt
+    assert '"repeated_buckets": [\n      "2 - 1",' in prompt
     assert '"coverage"' in prompt
     assert '"facts"' in prompt
     assert '"id": "E01"' in prompt
@@ -165,6 +183,9 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert "tu respuesta debe ser exclusivamente\nJSON valido" in prompt
     assert "marcadores comodos" in prompt
     assert "del favorito" in prompt
+    assert "Explica cuando se elige upside sobre EP puro" in prompt
+    assert "No" in prompt
+    assert "No cambies de\nganador sin respaldo probabilistico" in prompt
     assert "Usa `scoreline_distribution` como unica matriz coherente" in prompt
     assert "expected_points_candidates" in prompt
     assert "maximiza los puntos" in prompt

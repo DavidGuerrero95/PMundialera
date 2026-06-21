@@ -43,6 +43,10 @@ Variables principales:
 - `PMUNDIALERA_ENABLE_PAGE_SCRAPE`, por defecto `true`
 - `PMUNDIALERA_MAX_PAGES_PER_QUERY`, por defecto `2`
 - `PMUNDIALERA_PREDICTION_ENGINE`, por defecto `codex`
+- `PMUNDIALERA_POOL_POSITION`, por defecto `40`
+- `PMUNDIALERA_POOL_SIZE`, por defecto `50`
+- `PMUNDIALERA_POOL_STRATEGY`, por defecto `aggressive_high`
+- `PMUNDIALERA_STRATEGY_HORIZON`, por defecto `tournament`
 - `PMUNDIALERA_CODEX_EXECUTABLE`, por defecto `codex`
 - `PMUNDIALERA_CODEX_ARGS`, por defecto `exec -`
 - `PMUNDIALERA_CODEX_MODEL`, opcional si quieres forzar un modelo disponible
@@ -270,11 +274,15 @@ EP(h,a) = 5 * P(misma clase 1X2)
         + 1 * P(diferencia = h-a)
 ```
 
-En eliminatorias los pesos se duplican. Como la cuenta esta persiguiendo
-posiciones en el pool, el modo actual es `chasing`: el `primary` parte del mayor
-EP, pero puede escoger un marcador de mayor margen o mayor total cuando conserva
-la misma clase 1X2, queda cerca del lider por EP y aumenta upside de exacto,
-diferencia o goles. No cambia de ganador solo por perseguir.
+En eliminatorias los pesos se duplican. Como la cuenta esta en posicion `40/50`,
+el modo actual es `aggressive_high`: el `primary` parte del mayor EP, pero puede
+escoger un marcador de mayor margen, mayor total o mayor diferenciacion cuando
+queda cerca del lider por EP, mantiene probabilidad exacta minima y respeta los
+umbrales de cambio de clase 1X2. La presion de riesgo se calcula como
+`(pool_position - 1) / (pool_size - 1)`, que para `40/50` da `0.7959`.
+No cambia de ganador si hay favorito fuerte (`>= 0.72`) y solo permite sorpresas
+si la clase alternativa esta cerca, el partido esta abierto y no hay favorito
+dominante.
 
 El perfil probabilistico aplica regularizacion para evitar sobreentrenar un
 marcador bucket como `2-1`. Los priors globales de torneo, listas de ataques
@@ -287,9 +295,13 @@ Cuando mercado, ranking y calidad de plantel marcan superioridad clara, esos
 gaps bajan la confianza pero no borran el margen: el perfil puede abrirse a
 `2-0`, `0-2` u otros márgenes de dos goles si el xG del underdog queda bajo.
 
-En modo `chasing`, esos otros margenes incluyen `3-0` y `0-3` cuando el xG del
-underdog queda bajo y hay soporte de forma/produccion mas ranking, mercado o
-calidad de plantel.
+En modo `aggressive_high`, esos otros margenes incluyen `3-0` y `0-3` cuando el
+xG del underdog queda bajo y hay soporte de forma/produccion mas ranking,
+mercado o calidad de plantel. En partidos abiertos (`over_2_5 >= 0.58` y
+`BTTS >= 0.55`) puede preferir `3-1`, `1-3` o `2-2` sobre buckets repetidos
+cuando el EP esta cerca. El feedback de los ultimos 24 partidos unicos asentados
+se guarda en SQLite como `metadata.strategy_memory` y ajusta total, margen,
+empates falsos y repeticion de buckets.
 
 Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 

@@ -164,6 +164,7 @@ def test_prediction_store_ignores_legacy_files(tmp_path: Path) -> None:
     )
     (tmp_path / "learning-memory.md").write_text("# learning\n- keep calibration", encoding="utf-8")
     (tmp_path / "tournament-state.md").write_text("# state\n- A: P1 W1", encoding="utf-8")
+    (tmp_path / "strategy-memory.json").write_text('{"sample_size":99}', encoding="utf-8")
 
     store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
 
@@ -171,6 +172,7 @@ def test_prediction_store_ignores_legacy_files(tmp_path: Path) -> None:
     assert store.load_outcomes() == []
     assert store.load_learning_memory() == ""
     assert store.load_tournament_state_memory() == ""
+    assert store.load_strategy_memory() == ""
 
 
 def test_prediction_prompt_memory_uses_sqlite_only(tmp_path: Path) -> None:
@@ -179,6 +181,7 @@ def test_prediction_prompt_memory_uses_sqlite_only(tmp_path: Path) -> None:
     store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
     store.write_learning_memory("# sqlite learning")
     store.write_tournament_state_memory("# sqlite state")
+    store.write_strategy_memory('{"sample_size":2}')
     store.record_research_brief(
         ResearchBrief(
             match=Match(match_id="32", kickoff=None, home=Team("USA"), away=Team("Australia")),
@@ -202,6 +205,7 @@ def test_prediction_prompt_memory_uses_sqlite_only(tmp_path: Path) -> None:
 
     assert "# sqlite learning" in memory
     assert "# sqlite state" in memory
+    assert "sample_size" not in memory
     assert "# PMundialera recent research signals" in memory
     assert "Pulisic and Balogun" in memory
     assert "legacy" not in memory

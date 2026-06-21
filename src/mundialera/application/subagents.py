@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mundialera.application.calibration import calibrate_research_brief
+from mundialera.application.pool_strategy import PoolStrategyContext, StrategyMemory
 from mundialera.application.probability import (
     build_probability_profile,
     enrich_probability_profile,
@@ -57,10 +58,23 @@ class PromptBackedResearchAgent:
 class HeuristicPredictionModel(PredictionModel):
     """Deterministic baseline until stronger statistical models are added."""
 
+    def __init__(
+        self,
+        *,
+        pool_context: PoolStrategyContext | None = None,
+        strategy_memory: StrategyMemory | None = None,
+    ) -> None:
+        self._pool_context = pool_context
+        self._strategy_memory = strategy_memory
+
     def predict(self, brief: ResearchBrief) -> Prediction:
         match = brief.match
         profile = brief.probability_profile or build_probability_profile(brief)
-        primary = scoreline_from_profile(profile)
+        primary = scoreline_from_profile(
+            profile,
+            pool_context=self._pool_context,
+            strategy_memory=self._strategy_memory,
+        )
         hedge = portfolio_hedge_from_profile(profile, primary)
         confidence = result_probability(profile, primary)
         calibration_penalty = 0.0
