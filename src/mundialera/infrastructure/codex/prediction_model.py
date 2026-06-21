@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from mundialera.application.score_distribution import (
-    best_scoreline_by_expected_points,
+    best_scoreline_by_pool_strategy,
     expected_points_payload,
     result_probability,
     scoreline_distribution_payload,
@@ -340,7 +340,7 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         }
     if brief.probability_profile is not None:
         candidates = expected_points_payload(brief.probability_profile)
-        optimized_primary = best_scoreline_by_expected_points(brief.probability_profile)
+        optimized_primary = best_scoreline_by_pool_strategy(brief.probability_profile)
         context["probability_profile"] = {
             "home_win": brief.probability_profile.home_win,
             "draw": brief.probability_profile.draw,
@@ -364,7 +364,7 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
                 ),
             },
             "selection_rule": (
-                "primary is deterministically selected by expected GolPredictor points"
+                "primary is deterministically selected by chasing pool strategy"
             ),
         }
     template = textwrap.dedent(
@@ -492,10 +492,12 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
         + 2 * P(goles_visitante = a)
         + 1 * P(diferencia_gol = h-a)`
 
-        En fases eliminatorias los pesos se duplican, sin cambiar el criterio
-        de seleccion. `expected_points_candidates` ya trae los candidatos
-        ordenados por esa funcion. `primary` debe ser el marcador con mayor EP,
-        no necesariamente el marcador exacto modal.
+        En fases eliminatorias los pesos se duplican. `expected_points_candidates`
+        ya trae los candidatos ordenados por esa funcion. Como estamos en modo
+        persecucion del pool, `primary` debe partir del mayor EP, pero puede
+        elegir un marcador con mayor margen o total si conserva la misma clase
+        1X2, queda cerca del lider por EP y aumenta upside de marcador exacto,
+        diferencia o goles. No cambies de ganador solo por perseguir.
 
         ## Reglas de decision
 
@@ -512,6 +514,12 @@ def _build_prediction_prompt(brief: ResearchBrief, *, learning_memory: str) -> s
           bloque bajo, porteros fuertes o baja conversion.
         - Si ranking, mercado, forma y techo ofensivo alinean a un favorito,
           prefiere victoria por 1-2 goles aunque existan gaps secundarios.
+        - Modo estrategia actual: persecucion. Estamos en posicion baja del pool;
+          si un marcador de mayor margen o mayor total conserva la misma clase
+          1X2 y queda cerca de `expected_points_candidates[0]`, prefiere el
+          marcador con mayor upside de exacto/margen sobre el marcador minimo.
+          No cambies de ganador solo por perseguir; aumenta riesgo dentro de la
+          misma clase probabilistica.
         - Si la superioridad es notoria y esta respaldada por mercado/ranking/
           calidad de plantel, no reduzcas automaticamente el analisis a victoria
           minima: evalua 2-0, 0-2, 3-0, 0-3 o margen de dos goles si la matriz
@@ -606,7 +614,7 @@ def _prediction_from_payload(brief: ResearchBrief, payload: dict[str, object]) -
     if evidence_gaps:
         rationale.append("Gaps de evidencia: " + "; ".join(evidence_gaps))
     if brief.probability_profile is not None:
-        optimized_primary = best_scoreline_by_expected_points(brief.probability_profile)
+        optimized_primary = best_scoreline_by_pool_strategy(brief.probability_profile)
         if optimized_primary != primary:
             rationale.append(
                 "Marcadores ajustados por optimizador deterministico de puntos esperados "

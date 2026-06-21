@@ -102,10 +102,12 @@ Each prediction receives calibration signals for draw risk, favorite-bias risk,
 missing evidence categories, and evidence quality.
 Before submission, the application derives an auditable probability profile
 for home/draw/away, over 2.5, both-teams-to-score, and expected goals from a
-single scoreline distribution. The final primary is the scoreline that maximizes
-GolPredictor expected points, not necessarily the modal exact score. Decision
-guardrails cap confidence and reduce unsupported favorite margins. The same
-primary scoreline is submitted for every configured group.
+single scoreline distribution. The final primary starts from GolPredictor
+expected points, but the current pool strategy is `chasing`: when the account is
+behind the leaderboard, a higher-margin or higher-total score can beat the EP
+leader if it keeps the same 1X2 class and stays close enough in expected points.
+Decision guardrails cap confidence and reduce unsupported favorite margins. The
+same primary scoreline is submitted for every configured group.
 
 Prompt context must stay scoped: use the two match teams, same-group state when
 mapped, and compact global tournament priors. Do not inject detailed state for
@@ -118,7 +120,9 @@ weak prior, not direct evidence for both teams to score in a specific match.
 Clear market/ranking/squad-quality superiority should affect margin, not only
 confidence. Missing lineups, goalkeeper detail, or set pieces reduce certainty,
 but they should not automatically compress a clear favorite into a 1-goal result
-when the underdog xG is low.
+when the underdog xG is low. In chasing mode, supported favorites can expand to
+3-0 or 0-3 when recent production/form plus ranking, market, or squad quality
+support the margin.
 
 ## Pre-submit verification
 

@@ -50,10 +50,12 @@ EP(h,a) = 5 * P(same 1X2 class)
         + 1 * P(goal difference = h-a)
 ```
 
-For knockout rounds the weights double, but the same maximization rule applies.
-The primary prediction is the highest-EP scoreline, not necessarily the modal
-exact score. Confidence represents the calibrated probability of the selected
-primary 1X2 class, not generic document quality.
+For knockout rounds the weights double. The current leaderboard strategy is
+`chasing` because the account is behind the pool: primary starts from the
+highest-EP scoreline, but may select a higher-margin or higher-total candidate
+when it keeps the same 1X2 class, remains close in EP, and improves exact,
+goal-difference, or goal-count upside. Confidence represents the calibrated
+probability of the selected primary 1X2 class, not generic document quality.
 Do not let uncertainty collapse into a repeated score bucket such as `2-1` or
 `1-0`. If those scorelines win, they must win through the distribution and EP,
 not because they are a generic football default. Compact global tournament priors
@@ -61,8 +63,8 @@ must remain weak; global open-profile, hot-attack, or leaky-defense lists are no
 direct BTTS/over evidence unless they describe one of the two match teams.
 When market, ranking, squad quality, and attacking ceiling align behind a clear
 favorite, missing secondary categories should lower confidence but must not erase
-the margin signal by default. Evaluate two-goal favorite margins when the
-underdog xG is low and the evidence describes clear superiority.
+the margin signal by default. Evaluate two- and three-goal favorite margins when
+the underdog xG is low and the evidence describes clear superiority.
 
 Use learning memory as a weak prior, especially with small samples; do not
 memorize one-off team results or overfit a single settled match.

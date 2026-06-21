@@ -260,7 +260,8 @@ El prompt incluye:
 - reglas de salida JSON
 
 La seleccion final del marcador no depende solo del texto del LLM. Cuando existe
-perfil probabilistico, el sistema calcula una matriz de marcadores y maximiza:
+perfil probabilistico, el sistema calcula una matriz de marcadores y usa estos
+puntos esperados como base:
 
 ```text
 EP(h,a) = 5 * P(misma clase 1X2)
@@ -269,9 +270,11 @@ EP(h,a) = 5 * P(misma clase 1X2)
         + 1 * P(diferencia = h-a)
 ```
 
-En eliminatorias los pesos se duplican. El `primary` guardado es el unico
-marcador enviado a GolPredictor en todos los grupos, no necesariamente el
-marcador exacto modal.
+En eliminatorias los pesos se duplican. Como la cuenta esta persiguiendo
+posiciones en el pool, el modo actual es `chasing`: el `primary` parte del mayor
+EP, pero puede escoger un marcador de mayor margen o mayor total cuando conserva
+la misma clase 1X2, queda cerca del lider por EP y aumenta upside de exacto,
+diferencia o goles. No cambia de ganador solo por perseguir.
 
 El perfil probabilistico aplica regularizacion para evitar sobreentrenar un
 marcador bucket como `2-1`. Los priors globales de torneo, listas de ataques
@@ -283,6 +286,10 @@ forzar ambos equipos anotan por inercia.
 Cuando mercado, ranking y calidad de plantel marcan superioridad clara, esos
 gaps bajan la confianza pero no borran el margen: el perfil puede abrirse a
 `2-0`, `0-2` u otros márgenes de dos goles si el xG del underdog queda bajo.
+
+En modo `chasing`, esos otros margenes incluyen `3-0` y `0-3` cuando el xG del
+underdog queda bajo y hay soporte de forma/produccion mas ranking, mercado o
+calidad de plantel.
 
 Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 

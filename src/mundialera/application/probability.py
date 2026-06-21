@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass, replace
 
 from mundialera.application.score_distribution import (
-    best_scoreline_by_expected_points,
+    best_scoreline_by_pool_strategy,
     coherent_profile_from_expected_goals,
     hedge_scoreline_by_expected_points,
 )
@@ -245,7 +245,7 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
 
 
 def scoreline_from_profile(profile: ProbabilityProfile) -> Scoreline:
-    return best_scoreline_by_expected_points(profile)
+    return best_scoreline_by_pool_strategy(profile)
 
 
 def draw_hedge_from_profile(profile: ProbabilityProfile, primary: Scoreline) -> Scoreline:

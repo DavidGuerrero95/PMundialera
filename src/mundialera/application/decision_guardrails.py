@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mundialera.application.probability import draw_hedge_from_profile, portfolio_hedge_from_profile
-from mundialera.domain.models import Prediction, ResearchBrief, Scoreline
+from mundialera.domain.models import EvidenceCategory, Prediction, ResearchBrief, Scoreline
 
 
 def apply_prediction_guardrails(prediction: Prediction, brief: ResearchBrief) -> Prediction:
@@ -67,12 +67,61 @@ def _unsupported_comfortable_favorite(scoreline: Scoreline, brief: ResearchBrief
         return False
     if abs(scoreline.home - scoreline.away) < 2:
         return False
+    if _chasing_margin_supported(scoreline, brief):
+        return False
     calibration = brief.calibration
     return (
         calibration.evidence_quality < 0.55
         or calibration.favorite_bias_risk >= 0.45
         or calibration.draw_risk >= 0.45
     )
+
+
+def _chasing_margin_supported(scoreline: Scoreline, brief: ResearchBrief) -> bool:
+    profile = brief.probability_profile
+    if profile is None:
+        return False
+    if abs(scoreline.home - scoreline.away) >= 3 and not _has_margin_support(brief):
+        return False
+    if scoreline.home > scoreline.away:
+        return (
+            profile.home_win >= 0.72
+            and profile.expected_home_goals >= 2.15
+            and profile.expected_away_goals <= 0.75
+        ) or (
+            profile.home_win >= 0.48
+            and profile.over_2_5 >= 0.62
+            and profile.expected_home_goals >= 1.75
+        )
+    return (
+        profile.away_win >= 0.72
+        and profile.expected_away_goals >= 2.15
+        and profile.expected_home_goals <= 0.75
+    ) or (
+        profile.away_win >= 0.48
+        and profile.over_2_5 >= 0.62
+        and profile.expected_away_goals >= 1.75
+        )
+
+
+def _has_margin_support(brief: ResearchBrief) -> bool:
+    categories = {item.category for item in brief.structured_evidence}
+    production_support = bool(
+        categories
+        & {
+            EvidenceCategory.RECENT_MATCH_STATS,
+            EvidenceCategory.FORM,
+        }
+    )
+    strength_support = bool(
+        categories
+        & {
+            EvidenceCategory.RANKING,
+            EvidenceCategory.MARKET,
+            EvidenceCategory.PLAYER_CONTEXT,
+        }
+    )
+    return production_support and strength_support
 
 
 def _reduce_margin(scoreline: Scoreline) -> Scoreline:

@@ -137,6 +137,19 @@ def best_scoreline_by_expected_points(profile: ProbabilityProfile) -> Scoreline:
     return candidates[0].scoreline if candidates else Scoreline(1, 1)
 
 
+def best_scoreline_by_pool_strategy(
+    profile: ProbabilityProfile,
+    *,
+    strategy: str = "chasing",
+) -> Scoreline:
+    candidates = expected_points_candidates(profile)
+    if not candidates:
+        return Scoreline(1, 1)
+    if strategy != "chasing":
+        return candidates[0].scoreline
+    return _chasing_scoreline(profile, candidates)
+
+
 def hedge_scoreline_by_expected_points(
     profile: ProbabilityProfile,
     primary: Scoreline,
@@ -210,6 +223,68 @@ def expected_points_payload(
         }
         for item in expected_points_candidates(profile, top=top)
     ]
+
+
+def _chasing_scoreline(
+    profile: ProbabilityProfile,
+    candidates: list[ExpectedPointsCandidate],
+) -> Scoreline:
+    leader = candidates[0]
+    leader_scoreline = leader.scoreline
+    leader_result = _result_class(leader_scoreline)
+    favorite_probability = max(profile.home_win, profile.away_win)
+    if leader_result == "draw":
+        if profile.over_2_5 < 0.62 or profile.both_teams_to_score < 0.58:
+            return leader_scoreline
+        ep_tolerance = 0.24
+    elif favorite_probability >= 0.70:
+        ep_tolerance = 0.36
+    elif profile.over_2_5 >= 0.60:
+        ep_tolerance = 0.32
+    elif favorite_probability >= 0.45:
+        ep_tolerance = 0.18
+    else:
+        return leader_scoreline
+
+    minimum_exact_probability = leader.exact_probability * 0.40
+    viable = [
+        candidate
+        for candidate in candidates[:16]
+        if _result_class(candidate.scoreline) == leader_result
+        and candidate.expected_pool_points >= leader.expected_pool_points - ep_tolerance
+        and candidate.exact_probability >= minimum_exact_probability
+    ]
+    if len(viable) <= 1:
+        return leader_scoreline
+    viable.sort(
+        key=lambda item: _chasing_candidate_score(profile, leader, item),
+        reverse=True,
+    )
+    return viable[0].scoreline
+
+
+def _chasing_candidate_score(
+    profile: ProbabilityProfile,
+    leader: ExpectedPointsCandidate,
+    candidate: ExpectedPointsCandidate,
+) -> tuple[float, float, int, int]:
+    leader_total = leader.home + leader.away
+    candidate_total = candidate.home + candidate.away
+    leader_margin = abs(leader.home - leader.away)
+    candidate_margin = abs(candidate.home - candidate.away)
+    favorite_probability = max(profile.home_win, profile.away_win)
+    total_bonus = max(0, candidate_total - leader_total)
+    margin_bonus = max(0, candidate_margin - leader_margin)
+    if favorite_probability >= 0.70:
+        upside_bonus = (margin_bonus * 0.30) + (total_bonus * 0.12)
+    else:
+        upside_bonus = (total_bonus * 0.22) + (margin_bonus * 0.10)
+    return (
+        candidate.expected_pool_points + upside_bonus,
+        candidate.exact_probability,
+        candidate_total,
+        candidate_margin,
+    )
 
 
 def _poisson_pmf(mean: float, goals: int) -> float:

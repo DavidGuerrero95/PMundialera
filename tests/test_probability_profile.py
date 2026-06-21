@@ -8,6 +8,8 @@ from mundialera.application.probability import (
     scoreline_from_profile,
 )
 from mundialera.application.score_distribution import (
+    best_scoreline_by_expected_points,
+    best_scoreline_by_pool_strategy,
     build_scoreline_distribution,
     expected_points_candidates,
 )
@@ -140,7 +142,7 @@ def test_probability_profile_uses_leaky_underdog_state_without_defaulting_to_two
 
     assert profile.home_win >= 0.75
     assert profile.expected_away_goals <= 0.50
-    assert scoreline == Scoreline(2, 0)
+    assert scoreline == Scoreline(3, 0)
 
 
 def test_clear_home_favorite_can_expand_margin_beyond_narrow_win() -> None:
@@ -173,7 +175,7 @@ def test_clear_home_favorite_can_expand_margin_beyond_narrow_win() -> None:
     assert profile.home_win >= 0.75
     assert profile.expected_home_goals >= 2.0
     assert profile.expected_away_goals <= 0.60
-    assert scoreline == Scoreline(2, 0)
+    assert scoreline == Scoreline(3, 0)
 
 
 def test_clear_away_favorite_can_expand_margin_beyond_narrow_win() -> None:
@@ -207,7 +209,7 @@ def test_clear_away_favorite_can_expand_margin_beyond_narrow_win() -> None:
     assert profile.away_win >= 0.70
     assert profile.expected_away_goals >= 2.0
     assert profile.expected_home_goals <= 0.80
-    assert scoreline == Scoreline(0, 2)
+    assert scoreline == Scoreline(0, 3)
 
 
 def test_global_tournament_open_terms_do_not_inflate_match_total() -> None:
@@ -302,3 +304,18 @@ def test_expected_points_optimizer_can_prefer_non_modal_scoreline() -> None:
     assert modal == Scoreline(1, 1)
     assert candidates[0].scoreline == Scoreline(2, 1)
     assert candidates[0].expected_pool_points > candidates[1].expected_pool_points
+
+
+def test_chasing_strategy_takes_higher_upside_same_result_when_ep_is_close() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.82,
+        draw=0.14,
+        away_win=0.04,
+        over_2_5=0.51,
+        both_teams_to_score=0.29,
+        expected_home_goals=2.30,
+        expected_away_goals=0.38,
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(2, 0)
+    assert best_scoreline_by_pool_strategy(profile) == Scoreline(3, 0)
