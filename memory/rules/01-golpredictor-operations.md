@@ -21,3 +21,5 @@
 - For speed, `run schedule` may use only the first configured group as the
   tournament calendar source. Real submission must still use every configured
   group through `run once`.
+- In the Windows runner, audit is useful but non-critical. Audit timeouts or
+  failures must not block the next sleep/submission cycle.

@@ -12,6 +12,10 @@ param(
 
     [int] $CycleTimeoutSeconds = 1500,
 
+    [int] $ScheduleTimeoutSeconds = 180,
+
+    [int] $AuditTimeoutSeconds = 90,
+
     [int] $IdlePollSeconds = 21600,
 
     [int] $PreWindowBufferSeconds = 300
@@ -159,7 +163,7 @@ try {
                         "--active-poll-seconds", $IntervalSeconds,
                         "--pre-window-buffer-seconds", $PreWindowBufferSeconds
                     ) `
-                    -TimeoutSeconds $CycleTimeoutSeconds
+                    -TimeoutSeconds $ScheduleTimeoutSeconds
                 $schedule = $scheduleOutput | ConvertFrom-Json
                 $nextMatch = "none"
                 $nextMatches = @()
@@ -205,12 +209,17 @@ try {
                         (Get-Date -Format "s")
                     )
                 }
-                Invoke-PMundialeraPython `
-                    -Arguments @(
-                        "-m", "mundialera.interfaces.cli", "run", "audit",
-                        "--json"
-                    ) `
-                    -TimeoutSeconds $CycleTimeoutSeconds
+                try {
+                    Invoke-PMundialeraPython `
+                        -Arguments @(
+                            "-m", "mundialera.interfaces.cli", "run", "audit",
+                            "--json"
+                        ) `
+                        -TimeoutSeconds $AuditTimeoutSeconds
+                } catch {
+                    Write-Output ("[{0}] PMundialera audit failed without blocking schedule: {1}" -f (Get-Date -Format "s"), $_.Exception.Message)
+                    Write-PMundialeraHeartbeat -Status "audit_failed" -Cycle $cycle -Schedule $schedule -Message $_.Exception.Message
+                }
                 Write-PMundialeraHeartbeat -Status "cycle_ok" -Cycle $cycle -Schedule $schedule
             } catch {
                 Write-Output ("[{0}] PMundialera cycle {1} failed: {2}" -f (Get-Date -Format "s"), $cycle, $_.Exception.Message)

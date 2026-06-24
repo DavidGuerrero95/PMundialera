@@ -160,6 +160,9 @@ single summary match for the full workload.
 To keep the watcher fast, `run schedule` reads fixtures from the first configured
 group as the tournament calendar source. This does not limit submissions:
 `run once` still scans and submits every configured group.
+The Windows runner uses shorter timeouts for schedule/audit than for prediction.
+Audit failures are logged and written to the heartbeat but do not block the next
+sleep/submission cycle.
 
 When several matches share the same kickoff, `run once` processes all configured
 groups by unique match first, not by completing one group at a time. This avoids
