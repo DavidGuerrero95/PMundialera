@@ -79,6 +79,7 @@ def _pool_strategy_context(settings: Settings) -> PoolStrategyContext:
         pool_size=settings.pmundialera_pool_size,
         strategy=settings.pmundialera_pool_strategy,
         horizon=settings.pmundialera_strategy_horizon,
+        tournament_phase=settings.pmundialera_tournament_phase,
     )
 
 

@@ -154,7 +154,10 @@ def best_scoreline_by_pool_strategy(
             profile,
             candidates,
             strategy_memory=strategy_memory,
-            risk_pressure=pool_context.risk_pressure if pool_context is not None else 0.80,
+            risk_pressure=(
+                pool_context.effective_risk_pressure if pool_context is not None else 0.80
+            ),
+            final_phase=pool_context.is_final_phase if pool_context is not None else False,
         )
     if strategy_name != "chasing":
         return candidates[0].scoreline
@@ -304,9 +307,15 @@ def _aggressive_high_scoreline(
     *,
     strategy_memory: StrategyMemory | None,
     risk_pressure: float,
+    final_phase: bool,
 ) -> Scoreline:
     leader = candidates[0]
     memory = strategy_memory or StrategyMemory()
+    resolved_risk_pressure = _final_phase_risk_pressure(
+        risk_pressure,
+        final_phase=final_phase,
+        strategy_memory=memory,
+    )
     viable = [
         candidate
         for candidate in candidates[:36]
@@ -315,6 +324,7 @@ def _aggressive_high_scoreline(
             leader,
             candidate,
             strategy_memory=memory,
+            final_phase=final_phase,
         )
     ]
     if len(viable) <= 1:
@@ -325,7 +335,8 @@ def _aggressive_high_scoreline(
             leader,
             item,
             strategy_memory=memory,
-            risk_pressure=risk_pressure,
+            risk_pressure=resolved_risk_pressure,
+            final_phase=final_phase,
         ),
         reverse=True,
     )
@@ -338,14 +349,34 @@ def _is_aggressive_high_candidate(
     candidate: ExpectedPointsCandidate,
     *,
     strategy_memory: StrategyMemory,
+    final_phase: bool,
 ) -> bool:
     if candidate == leader:
         return True
-    if candidate.exact_probability < leader.exact_probability * 0.35:
+    minimum_exact_ratio = 0.30 if final_phase else 0.35
+    if candidate.exact_probability < leader.exact_probability * minimum_exact_ratio:
         return False
-    if candidate.home > 3 or candidate.away > 3:
+    max_side_goals = 4 if final_phase else 3
+    max_total_goals = 5 if final_phase else 4
+    if candidate.home > max_side_goals or candidate.away > max_side_goals:
         return False
-    if candidate.home + candidate.away > 4:
+    if candidate.home + candidate.away > max_total_goals:
+        return False
+    if (
+        final_phase
+        and candidate.home + candidate.away == 5
+        and not _final_phase_high_total_supported(
+            profile,
+            candidate.scoreline,
+            strategy_memory,
+        )
+    ):
+        return False
+    if (
+        final_phase
+        and max(candidate.home, candidate.away) == 4
+        and not _final_phase_four_goal_supported(profile, candidate.scoreline, strategy_memory)
+    ):
         return False
     if _is_unsupported_three_goal_shutout(profile, candidate.scoreline):
         return False
@@ -359,7 +390,11 @@ def _is_aggressive_high_candidate(
     leader_result = _result_class(leader.scoreline)
     candidate_result = _result_class(candidate.scoreline)
     draw_ep_bypass = _is_aggressive_draw(profile, candidate.scoreline, strategy_memory)
-    if not draw_ep_bypass and not _close_to_expected_points_leader(leader, candidate):
+    if not draw_ep_bypass and not _close_to_expected_points_leader(
+        leader,
+        candidate,
+        final_phase=final_phase,
+    ):
         return False
     strong_favorite = _strong_favorite_class(profile)
     if strong_favorite is not None and candidate_result != strong_favorite:
@@ -369,19 +404,30 @@ def _is_aggressive_high_candidate(
             profile,
             candidate_result,
             strategy_memory=strategy_memory,
+            final_phase=final_phase,
         ):
             return False
         return _candidate_improves_margin_or_total(leader, candidate)
-    return _can_change_result_class(profile, leader, candidate, strategy_memory=strategy_memory)
+    return _can_change_result_class(
+        profile,
+        leader,
+        candidate,
+        strategy_memory=strategy_memory,
+        final_phase=final_phase,
+    )
 
 
 def _close_to_expected_points_leader(
     leader: ExpectedPointsCandidate,
     candidate: ExpectedPointsCandidate,
+    *,
+    final_phase: bool,
 ) -> bool:
+    ep_tolerance = 0.68 if final_phase else 0.55
+    ep_ratio = 0.86 if final_phase else 0.90
     return (
-        candidate.expected_pool_points >= leader.expected_pool_points - 0.55
-        or candidate.expected_pool_points >= leader.expected_pool_points * 0.90
+        candidate.expected_pool_points >= leader.expected_pool_points - ep_tolerance
+        or candidate.expected_pool_points >= leader.expected_pool_points * ep_ratio
     )
 
 
@@ -400,12 +446,18 @@ def _same_class_upside_supported(
     candidate_result: str,
     *,
     strategy_memory: StrategyMemory,
+    final_phase: bool,
 ) -> bool:
     return (
         _is_open_match(profile)
         or _strong_favorite_class(profile) == candidate_result
         or strategy_memory.total_high_pressure
         or strategy_memory.margin_pressure
+        or (
+            final_phase
+            and _class_probability(profile, candidate_result) >= 0.46
+            and (profile.over_2_5 >= 0.54 or strategy_memory.sample_size >= 12)
+        )
     )
 
 
@@ -415,6 +467,7 @@ def _can_change_result_class(
     candidate: ExpectedPointsCandidate,
     *,
     strategy_memory: StrategyMemory,
+    final_phase: bool,
 ) -> bool:
     leader_class = _result_class(leader.scoreline)
     candidate_class = _result_class(candidate.scoreline)
@@ -423,20 +476,26 @@ def _can_change_result_class(
     favorite_probability = max(profile.home_win, profile.away_win)
     if favorite_probability >= 0.72:
         return False
-    if abs(candidate_probability - leader_probability) > 0.16:
+    class_gap_limit = 0.18 if final_phase else 0.16
+    minimum_class_probability = 0.22 if final_phase else 0.24
+    if abs(candidate_probability - leader_probability) > class_gap_limit:
         return False
-    if candidate_probability < 0.24:
+    if candidate_probability < minimum_class_probability:
         return False
     if candidate_class == "draw":
         return _is_aggressive_draw(profile, candidate.scoreline, strategy_memory)
-    if not _is_open_match(profile):
+    if not _is_open_match(profile) and not (
+        final_phase and profile.over_2_5 >= 0.54 and profile.both_teams_to_score >= 0.52
+    ):
         return False
-    if candidate.expected_pool_points < leader.expected_pool_points - 0.45:
+    ep_tolerance = 0.55 if final_phase else 0.45
+    if candidate.expected_pool_points < leader.expected_pool_points - ep_tolerance:
         return False
     if abs(candidate.home - candidate.away) > 1:
         return False
     if leader_class != "draw" and candidate_probability < leader_probability:
-        return favorite_probability <= 0.62
+        favorite_limit = 0.64 if final_phase else 0.62
+        return favorite_probability <= favorite_limit
     return True
 
 
@@ -447,6 +506,7 @@ def _aggressive_candidate_score(
     *,
     strategy_memory: StrategyMemory,
     risk_pressure: float,
+    final_phase: bool,
 ) -> tuple[float, float, int, int, float]:
     leader_total = leader.home + leader.away
     candidate_total = candidate.home + candidate.away
@@ -460,6 +520,9 @@ def _aggressive_candidate_score(
     margin_bonus = 0.14 + (0.20 if strategy_memory.margin_pressure else 0.0)
     total_bonus += risk_pressure * 0.10
     margin_bonus += risk_pressure * 0.10
+    if final_phase:
+        total_bonus += 0.06
+        margin_bonus += 0.08
     if _strong_favorite_class(profile) == _result_class(candidate.scoreline):
         margin_bonus += 0.10
 
@@ -468,6 +531,13 @@ def _aggressive_candidate_score(
 
     if _is_open_match(profile) and _is_open_match_upside(candidate.scoreline):
         score += 0.28
+    if final_phase and candidate_total >= 5:
+        score += 0.12
+    if final_phase and candidate_margin >= 2 and _class_probability(
+        profile,
+        _result_class(candidate.scoreline),
+    ) >= 0.58:
+        score += 0.10
     if _is_aggressive_draw(profile, candidate.scoreline, strategy_memory):
         score += 0.95
     if _is_low_total_leader(leader.scoreline) and candidate_total >= 3:
@@ -489,6 +559,58 @@ def _aggressive_candidate_score(
         candidate_total,
         candidate_margin,
         _class_probability(profile, _result_class(candidate.scoreline)),
+    )
+
+
+def _final_phase_risk_pressure(
+    risk_pressure: float,
+    *,
+    final_phase: bool,
+    strategy_memory: StrategyMemory,
+) -> float:
+    if not final_phase:
+        return risk_pressure
+    memory_boost = 0.06 if strategy_memory.sample_size >= 12 else 0.0
+    if strategy_memory.total_high_pressure or strategy_memory.margin_pressure:
+        memory_boost += 0.04
+    return min(1.0, risk_pressure + memory_boost)
+
+
+def _final_phase_high_total_supported(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    if profile.over_2_5 >= 0.62 and profile.both_teams_to_score >= 0.58:
+        return True
+    if (
+        _strong_favorite_class(profile) == _result_class(scoreline)
+        and max(profile.expected_home_goals, profile.expected_away_goals) >= 2.30
+        and min(profile.expected_home_goals, profile.expected_away_goals) <= 1.05
+    ):
+        return True
+    return strategy_memory.total_high_pressure and profile.over_2_5 >= 0.56
+
+
+def _final_phase_four_goal_supported(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    favorite_class = _result_class(scoreline)
+    favorite_xg = (
+        profile.expected_home_goals if favorite_class == "home" else profile.expected_away_goals
+    )
+    underdog_xg = (
+        profile.expected_away_goals if favorite_class == "home" else profile.expected_home_goals
+    )
+    if _strong_favorite_class(profile) == favorite_class and favorite_xg >= 2.35:
+        return True
+    return (
+        strategy_memory.margin_pressure
+        and _class_probability(profile, favorite_class) >= 0.68
+        and favorite_xg >= 2.25
+        and underdog_xg <= 1.05
     )
 
 

@@ -12,6 +12,18 @@ DEFAULT_POOL_POSITION = 40
 DEFAULT_POOL_SIZE = 50
 DEFAULT_POOL_STRATEGY = "aggressive_high"
 DEFAULT_STRATEGY_HORIZON = "tournament"
+DEFAULT_TOURNAMENT_PHASE = "final_phase"
+FINAL_PHASE_ALIASES = frozenset(
+    {
+        "final_phase",
+        "fase_final",
+        "phase_final",
+        "late_group",
+        "final_group",
+        "knockout",
+        "elimination",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +32,7 @@ class PoolStrategyContext:
     pool_size: int = DEFAULT_POOL_SIZE
     strategy: str = DEFAULT_POOL_STRATEGY
     horizon: str = DEFAULT_STRATEGY_HORIZON
+    tournament_phase: str = DEFAULT_TOURNAMENT_PHASE
 
     @property
     def risk_pressure(self) -> float:
@@ -27,13 +40,35 @@ class PoolStrategyContext:
             return 0.0
         return _clamp((self.position - 1) / (self.pool_size - 1), 0.0, 1.0)
 
+    @property
+    def tournament_phase_key(self) -> str:
+        return self.tournament_phase.strip().casefold()
+
+    @property
+    def is_final_phase(self) -> bool:
+        return self.tournament_phase_key in FINAL_PHASE_ALIASES
+
+    @property
+    def phase_risk_boost(self) -> float:
+        if not self.is_final_phase:
+            return 0.0
+        return 0.14 if self.risk_pressure >= 0.75 else 0.10
+
+    @property
+    def effective_risk_pressure(self) -> float:
+        return _clamp(self.risk_pressure + self.phase_risk_boost, 0.0, 1.0)
+
     def to_payload(self) -> dict[str, object]:
         return {
             "position": self.position,
             "pool_size": self.pool_size,
             "risk_pressure": round(self.risk_pressure, 4),
+            "effective_risk_pressure": round(self.effective_risk_pressure, 4),
             "strategy": self.strategy,
             "horizon": self.horizon,
+            "tournament_phase": self.tournament_phase,
+            "final_phase_aggression": self.is_final_phase,
+            "phase_risk_boost": round(self.phase_risk_boost, 4),
         }
 
 
@@ -101,12 +136,14 @@ def build_pool_strategy_context(
     pool_size: int = DEFAULT_POOL_SIZE,
     strategy: str = DEFAULT_POOL_STRATEGY,
     horizon: str = DEFAULT_STRATEGY_HORIZON,
+    tournament_phase: str = DEFAULT_TOURNAMENT_PHASE,
 ) -> PoolStrategyContext:
     return PoolStrategyContext(
         position=max(1, position),
         pool_size=max(2, pool_size),
         strategy=strategy.strip() or DEFAULT_POOL_STRATEGY,
         horizon=horizon.strip() or DEFAULT_STRATEGY_HORIZON,
+        tournament_phase=tournament_phase.strip() or DEFAULT_TOURNAMENT_PHASE,
     )
 
 

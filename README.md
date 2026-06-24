@@ -47,6 +47,7 @@ Variables principales:
 - `PMUNDIALERA_POOL_SIZE`, por defecto `50`
 - `PMUNDIALERA_POOL_STRATEGY`, por defecto `aggressive_high`
 - `PMUNDIALERA_STRATEGY_HORIZON`, por defecto `tournament`
+- `PMUNDIALERA_TOURNAMENT_PHASE`, por defecto `final_phase`
 - `PMUNDIALERA_CODEX_EXECUTABLE`, por defecto `codex`
 - `PMUNDIALERA_CODEX_ARGS`, por defecto `exec -`
 - `PMUNDIALERA_CODEX_MODEL`, opcional si quieres forzar un modelo disponible
@@ -302,6 +303,14 @@ mercado o calidad de plantel. En partidos abiertos (`over_2_5 >= 0.58` y
 cuando el EP esta cerca. El feedback de los ultimos 24 partidos unicos asentados
 se guarda en SQLite como `metadata.strategy_memory` y ajusta total, margen,
 empates falsos y repeticion de buckets.
+
+Para la fase final, `PMUNDIALERA_TOURNAMENT_PHASE=final_phase` aumenta la
+presion efectiva de riesgo porque ya existe mas informacion real de cada equipo
+en el Mundial. Ese modo permite evaluar candidatos de mayor total o margen como
+`3-2`, `2-3`, `4-1` o `4-0`, pero solo si la matriz de marcadores, forma del
+torneo, ranking/mercado, plantel, bajas, ataque/defensa y jugadores diferenciales
+lo respaldan. No habilita cambios de ganador contra favoritos fuertes ni
+marcadores amplios sin soporte probabilistico.
 
 Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 

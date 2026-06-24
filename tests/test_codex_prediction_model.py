@@ -147,8 +147,11 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert '"position": 40' in prompt
     assert '"pool_size": 50' in prompt
     assert '"risk_pressure": 0.7959' in prompt
+    assert '"effective_risk_pressure": 0.9359' in prompt
     assert '"strategy": "aggressive_high"' in prompt
     assert '"horizon": "tournament"' in prompt
+    assert '"tournament_phase": "final_phase"' in prompt
+    assert '"final_phase_aggression": true' in prompt
     assert '"strategy_memory"' in prompt
     assert '"under_total_rate": 0.58' in prompt
     assert '"repeated_buckets": [\n      "2 - 1",' in prompt
@@ -184,6 +187,8 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert "marcadores comodos" in prompt
     assert "del favorito" in prompt
     assert "Explica cuando se elige upside sobre EP puro" in prompt
+    assert "En `pool_context.tournament_phase = final_phase`" in prompt
+    assert "mas varianza controlada" in prompt
     assert "No" in prompt
     assert "No cambies de\nganador sin respaldo probabilistico" in prompt
     assert "Usa `scoreline_distribution` como unica matriz coherente" in prompt

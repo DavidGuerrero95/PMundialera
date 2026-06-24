@@ -41,7 +41,10 @@ def test_pool_strategy_context_calculates_risk_pressure_for_rank_40_of_50() -> N
 
     assert context.strategy == "aggressive_high"
     assert context.horizon == "tournament"
+    assert context.tournament_phase == "final_phase"
+    assert context.is_final_phase is True
     assert context.to_payload()["risk_pressure"] == 0.7959
+    assert context.to_payload()["effective_risk_pressure"] == 0.9359
 
 
 def test_strategy_memory_summarizes_recent_unique_underestimation_patterns() -> None:

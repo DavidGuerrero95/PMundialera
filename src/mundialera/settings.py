@@ -90,6 +90,10 @@ class Settings(BaseSettings):
         default="tournament",
         validation_alias="PMUNDIALERA_STRATEGY_HORIZON",
     )
+    pmundialera_tournament_phase: str = Field(
+        default="final_phase",
+        validation_alias="PMUNDIALERA_TOURNAMENT_PHASE",
+    )
     pmundialera_codex_executable: str = Field(
         default="codex",
         validation_alias="PMUNDIALERA_CODEX_EXECUTABLE",

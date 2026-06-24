@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from mundialera.application.calibration import calibrate_research_brief
-from mundialera.application.pool_strategy import StrategyMemory
+from mundialera.application.pool_strategy import PoolStrategyContext, StrategyMemory
 from mundialera.application.probability import (
     build_probability_profile,
     draw_hedge_from_profile,
@@ -12,6 +12,7 @@ from mundialera.application.score_distribution import (
     best_scoreline_by_expected_points,
     best_scoreline_by_pool_strategy,
     build_scoreline_distribution,
+    coherent_profile_from_expected_goals,
     expected_points_candidates,
 )
 from mundialera.domain.models import (
@@ -471,3 +472,39 @@ def test_aggressive_high_memory_allows_near_open_margin_upgrade() -> None:
         strategy="aggressive_high",
         strategy_memory=memory,
     ) == Scoreline(3, 1)
+
+
+def test_final_phase_aggression_expands_supported_favorite_margin() -> None:
+    profile = coherent_profile_from_expected_goals(2.40, 0.30)
+    memory = StrategyMemory(
+        sample_size=18,
+        under_total_rate=0.58,
+        under_margin_rate=0.54,
+        bucket_repetition_rate=0.50,
+        repeated_buckets=("2 - 0", "3 - 0"),
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(2, 0)
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        strategy="aggressive_high",
+        strategy_memory=memory,
+    ) == Scoreline(3, 0)
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        pool_context=PoolStrategyContext(tournament_phase="final_phase"),
+        strategy_memory=memory,
+    ) == Scoreline(4, 0)
+
+
+def test_final_phase_aggression_still_blocks_winner_change_against_strong_favorite() -> None:
+    profile = coherent_profile_from_expected_goals(2.40, 0.30)
+    memory = StrategyMemory(sample_size=18, under_total_rate=0.58, under_margin_rate=0.54)
+
+    scoreline = best_scoreline_by_pool_strategy(
+        profile,
+        pool_context=PoolStrategyContext(tournament_phase="final_phase"),
+        strategy_memory=memory,
+    )
+
+    assert scoreline.home > scoreline.away

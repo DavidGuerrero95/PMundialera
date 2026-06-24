@@ -126,6 +126,12 @@ when the underdog xG is low. In `aggressive_high` mode, supported favorites can
 expand to 3-0 or 0-3 when recent production/form plus ranking, market, or squad
 quality support the margin. Open matches can move from 2-1 to 3-1 or from 1-2 to
 1-3 when EP is close, while 2-2 requires draw, over, and BTTS all live.
+During `PMUNDIALERA_TOURNAMENT_PHASE=final_phase`, the effective risk pressure is
+raised because team-level tournament data is now more informative. The selector
+can consider higher-variance scorelines such as 3-2, 2-3, 4-1, or 4-0, but only
+when the scoreline distribution, team form, market/ranking, squad quality,
+availability, attacking ceiling, defensive weakness, or star-player context
+supports that upside. It still blocks winner changes against strong favorites.
 
 ## Pre-submit verification
 

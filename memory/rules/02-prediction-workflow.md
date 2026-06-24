@@ -67,6 +67,13 @@ When market, ranking, squad quality, and attacking ceiling align behind a clear
 favorite, missing secondary categories should lower confidence but must not erase
 the margin signal by default. Evaluate two- and three-goal favorite margins when
 the underdog xG is low and the evidence describes clear superiority.
+In `final_phase`, the selector may increase effective risk pressure because the
+system has more real tournament data for each team. It may evaluate higher-total
+or higher-margin candidates such as `3-2`, `2-3`, `4-1`, or `4-0`, but only when
+the coherent scoreline distribution, team form, market/ranking, squad quality,
+availability, attacking ceiling, defensive weakness, or star-player context
+supports that upside. Final-phase aggression must not override strong-favorite
+blocks or change winners without close 1X2 probability support.
 
 Use learning memory as a weak prior, especially with small samples; do not
 memorize one-off team results or overfit a single settled match.

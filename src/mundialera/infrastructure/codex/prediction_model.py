@@ -393,7 +393,7 @@ def _build_prediction_prompt(
                 ),
             },
             "selection_rule": (
-                "primary is deterministically selected by aggressive_high pool strategy"
+                "primary is deterministically selected by pool strategy and tournament phase"
             ),
         }
     template = textwrap.dedent(
@@ -529,6 +529,15 @@ def _build_prediction_prompt(
         defiendas un marcador conservador solo por menor riesgo. No cambies de
         ganador sin respaldo probabilistico.
 
+        En `pool_context.tournament_phase = final_phase`, el sistema ya cuenta
+        con mas datos reales del torneo para cada seleccion. Usa ese contexto
+        para aceptar mas varianza controlada: mayor total, mayor margen o
+        sorpresa cercana cuando la matriz, el estado del equipo en el Mundial,
+        ranking/mercado, produccion ofensiva, defensa rival, bajas o jugadores
+        diferenciales lo soporten. Fase final no significa apostar al azar:
+        nunca ignores un favorito fuerte ni cambies de ganador sin clase 1X2
+        cercana.
+
         ## Reglas de decision
 
         - Prioriza evidencia estructurada con mayor `tier` y `confidence`.
@@ -545,11 +554,16 @@ def _build_prediction_prompt(
         - Si ranking, mercado, forma y techo ofensivo alinean a un favorito,
           prefiere victoria por 1-2 goles aunque existan gaps secundarios.
         - Modo estrategia actual: `aggressive_high` para remontar en el pool.
-          Usa `pool_context.risk_pressure` y `strategy_memory` como guardrails:
+          Usa `pool_context.effective_risk_pressure`, `pool_context.tournament_phase`
+          y `strategy_memory` como guardrails:
           si hubo subestimacion reciente de totales o margenes, prefiere mayor
           total/margen cuando el EP esta cerca; si hubo falsos empates, no uses
           empate por incertidumbre; si los buckets 1-0, 1-1 o 2-1 se repiten,
           exige que ganen claramente por EP antes de mantenerlos.
+        - En fase final, si el equipo ya mostro su estado real en el Mundial,
+          puedes inclinarte mas a 3-1, 1-3, 3-2, 2-3, 4-1 o 4-0 solo si el
+          perfil de goles, forma, rival, plantel y mercado lo sostienen. No uses
+          esos marcadores si solo hay intuicion o falta de informacion.
         - Explica cuando se elige upside sobre EP puro. Si eliges margen amplio,
           menciona evidencia de xG, forma, rival debil, ranking, mercado o
           plantel. Si eliges empate o sorpresa, exige valor diferencial y
