@@ -146,6 +146,12 @@ and `confidence`. For debugging, inspect the local SQLite
 `expected_points_candidates`. A real `--submit` run still writes only inside the
 configured 35-minute window.
 
+When several matches share the same kickoff, `run once` processes all configured
+groups by unique match first, not by completing one group at a time. This avoids
+missing the second pool while Codex is still researching another match on the
+same hour. After each real WebForms save, the GolPredictor page cache is refreshed
+from the returned HTML so the next row on that page uses current hidden fields.
+
 ## Submission coverage audit
 
 ```powershell

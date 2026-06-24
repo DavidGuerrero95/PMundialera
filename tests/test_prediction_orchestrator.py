@@ -35,6 +35,17 @@ class FakeFixtures:
         return self._matches
 
 
+class GroupedFakeFixtures:
+    def __init__(self, matches_by_group: dict[str, list[Match]]) -> None:
+        self._matches_by_group = matches_by_group
+
+    def list_groups(self) -> list[str]:
+        return list(self._matches_by_group)
+
+    def list_matches(self, group_name: str) -> list[Match]:
+        return self._matches_by_group[group_name]
+
+
 class FakeSink:
     def __init__(self) -> None:
         self.submissions: list[SubmissionResult] = []
@@ -66,7 +77,11 @@ class FakeSubmissionRegistry:
 
 
 class FixedPredictionModel:
+    def __init__(self) -> None:
+        self.predicted_match_ids: list[str] = []
+
     def predict(self, brief: ResearchBrief) -> Prediction:
+        self.predicted_match_ids.append(brief.match.match_id)
         return Prediction(
             match=brief.match,
             primary=Scoreline(2, 0),
@@ -160,6 +175,66 @@ def test_run_group_window_uses_primary_for_all_groups() -> None:
     assert corex.submitted[0].scoreline == corex.evaluated[0].primary
     assert fifa.submitted[0].scoreline == fifa.evaluated[0].primary
     assert fifa.submitted[0].scoreline == corex.submitted[0].scoreline
+
+
+def test_run_groups_window_submits_same_kickoff_match_to_all_groups_first() -> None:
+    tz = ZoneInfo("America/Bogota")
+    now = datetime(2026, 6, 24, 13, 25, tzinfo=tz)
+    kickoff = datetime(2026, 6, 24, 14, 0, tzinfo=tz)
+    corex_suiza = Match(
+        match_id="51",
+        kickoff=kickoff,
+        home=Team("Suiza"),
+        away=Team("Canadá"),
+    )
+    corex_bosnia = Match(
+        match_id="52",
+        kickoff=kickoff,
+        home=Team("Bosnia-Herzegovina"),
+        away=Team("Catar"),
+    )
+    fifa_suiza = Match(
+        match_id="51",
+        kickoff=kickoff,
+        home=Team("Suiza"),
+        away=Team("Canadá"),
+    )
+    fifa_bosnia = Match(
+        match_id="52",
+        kickoff=kickoff,
+        home=Team("Bosnia-Herzegovina"),
+        away=Team("Catar"),
+    )
+    sink = FakeSink()
+    model = FixedPredictionModel()
+    orchestrator = PredictionOrchestrator(
+        fixtures=GroupedFakeFixtures(
+            {
+                "Mundial CoreX": [corex_suiza, corex_bosnia],
+                "Mundial FIFA 2026": [fifa_suiza, fifa_bosnia],
+            }
+        ),
+        research_agent=RecordingResearchAgent(),
+        prediction_model=model,
+        sink=sink,
+        clock=FakeClock(now),
+        submission_window_minutes=35,
+    )
+
+    results = orchestrator.run_groups_window(
+        ["Mundial CoreX", "Mundial FIFA 2026"],
+        dry_run=True,
+    )
+
+    assert [result.group_name for result in results] == ["Mundial CoreX", "Mundial FIFA 2026"]
+    assert [item.match.match_id for item in sink.submissions] == ["51", "51", "52", "52"]
+    assert [item.match.group for item in sink.submissions] == [
+        "Mundial CoreX",
+        "Mundial FIFA 2026",
+        "Mundial CoreX",
+        "Mundial FIFA 2026",
+    ]
+    assert sorted(model.predicted_match_ids) == ["51", "52"]
 
 
 def test_run_group_window_skips_real_submission_already_recorded() -> None:

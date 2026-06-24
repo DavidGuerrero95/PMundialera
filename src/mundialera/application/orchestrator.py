@@ -104,6 +104,73 @@ class PredictionOrchestrator:
             skipped=skipped,
         )
 
+    def run_groups_window(
+        self,
+        group_names: list[str],
+        *,
+        dry_run: bool,
+    ) -> list[WindowRunResult]:
+        now = self._clock.now()
+        predictions_by_group: dict[str, list[Prediction]] = {group: [] for group in group_names}
+        submissions_by_group: dict[str, list[SubmissionResult]] = {
+            group: [] for group in group_names
+        }
+        skipped_by_group: dict[str, list[str]] = {group: [] for group in group_names}
+        active_by_match: dict[str, list[Match]] = {}
+
+        for group_name in group_names:
+            for raw_match in self._fixtures.list_matches(group_name):
+                match = replace(raw_match, group=raw_match.group or group_name)
+                if match.kickoff is None:
+                    skipped_by_group[group_name].append(f"{match.label}: kickoff unavailable")
+                    continue
+
+                delta = match.kickoff - now
+                if not timedelta() <= delta <= self._window:
+                    skipped_by_group[group_name].append(f"{match.label}: outside submission window")
+                    continue
+                if (
+                    not dry_run
+                    and self._submission_registry is not None
+                    and self._submission_registry.has_successful_submission(
+                        group_name,
+                        match.match_id,
+                    )
+                ):
+                    skipped_by_group[group_name].append(
+                        f"{match.label}: already submitted for {group_name}"
+                    )
+                    continue
+                active_by_match.setdefault(_prediction_cache_key(match), []).append(match)
+
+        for matches in sorted(
+            active_by_match.values(),
+            key=lambda items: items[0].kickoff or now,
+        ):
+            prediction = self.predict_match(matches[0])
+            for match in matches:
+                group_name = match.group or ""
+                group_prediction = replace(prediction, match=match)
+                predictions_by_group[group_name].append(group_prediction)
+                submission = self._sink.submit_prediction(
+                    match,
+                    group_prediction.primary,
+                    dry_run=dry_run,
+                )
+                submissions_by_group[group_name].append(submission)
+                if self._recorder is not None:
+                    self._recorder.record_prediction(group_prediction, submission)
+
+        return [
+            WindowRunResult(
+                group_name=group_name,
+                evaluated=predictions_by_group[group_name],
+                submitted=submissions_by_group[group_name],
+                skipped=skipped_by_group[group_name],
+            )
+            for group_name in group_names
+        ]
+
     def preview_upcoming(self, group_name: str, *, limit: int) -> list[Prediction]:
         now = self._clock.now()
         upcoming = [

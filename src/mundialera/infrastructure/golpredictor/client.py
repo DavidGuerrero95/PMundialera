@@ -151,6 +151,8 @@ class GolPredictorClient(FixtureRepository, PredictionSink):
             form[f"{form_ref.submit_field}.y"] = "10"
         response = self._client.post(form_ref.form_action, data=form)
         response.raise_for_status()
+        if match.group:
+            self._refresh_page_cache(match.group, response.text)
         return SubmissionResult(
             match=match,
             scoreline=scoreline,
@@ -190,6 +192,10 @@ class GolPredictorClient(FixtureRepository, PredictionSink):
         form["__EVENTARGUMENT"] = argument
         response = self._post(_form_action(html, page_url), data=form)
         return response.text
+
+    def _refresh_page_cache(self, group_name: str, html: str) -> None:
+        for match in parse_matches(html, group_name=group_name, timezone_name=str(self._timezone)):
+            self._page_cache[(group_name, match.match_id)] = html
 
     @retry(
         retry=retry_if_exception_type(httpx.HTTPStatusError),

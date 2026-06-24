@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mundialera.infrastructure.golpredictor.client import parse_matches
+from mundialera.infrastructure.golpredictor.client import (
+    GolPredictorClient,
+    GolPredictorCredentials,
+    parse_matches,
+)
 
 
 def test_parse_golpredictor_group_table() -> None:
@@ -21,3 +25,19 @@ def test_parse_golpredictor_group_table() -> None:
     assert matches[1].prediction is None
     assert matches[1].kickoff is not None
     assert matches[1].kickoff.year == 2026
+
+
+def test_refresh_page_cache_updates_every_match_on_returned_page() -> None:
+    html = Path("tests/fixtures/golpredictor_group.html").read_text(encoding="utf-8")
+    client = GolPredictorClient(
+        base_url="https://www.golpredictor.com/",
+        credentials=GolPredictorCredentials(username="", password=""),
+        timezone_name="America/Bogota",
+    )
+    try:
+        client._refresh_page_cache("Mundial CoreX", html)
+
+        assert client._page_cache[("Mundial CoreX", "14")] == html
+        assert client._page_cache[("Mundial CoreX", "16")] == html
+    finally:
+        client.close()

@@ -173,10 +173,10 @@ def run_once(
     settings = get_settings()
     effective_dry_run = dry_run and not submit
     orchestrator = build_orchestrator(settings)
-    results = [
-        orchestrator.run_group_window(group, dry_run=effective_dry_run)
-        for group in settings.configured_groups()
-    ]
+    results = orchestrator.run_groups_window(
+        settings.configured_groups(),
+        dry_run=effective_dry_run,
+    )
     payload = [
         {
             "group": result.group_name,
