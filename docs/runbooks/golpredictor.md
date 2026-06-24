@@ -157,6 +157,9 @@ configured 35-minute window.
 or when multiple matches are already inside the active submission window,
 `next_matches` must contain all of them so the operator does not mistake the
 single summary match for the full workload.
+To keep the watcher fast, `run schedule` reads fixtures from the first configured
+group as the tournament calendar source. This does not limit submissions:
+`run once` still scans and submits every configured group.
 
 When several matches share the same kickoff, `run once` processes all configured
 groups by unique match first, not by completing one group at a time. This avoids

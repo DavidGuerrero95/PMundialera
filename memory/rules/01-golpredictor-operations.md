@@ -18,3 +18,6 @@
 - `run schedule` and the watcher heartbeat must expose `next_matches` when
   several matches share kickoff or are simultaneously active. Treat `next_match`
   as a compatibility summary only; never infer that it is the full workload.
+- For speed, `run schedule` may use only the first configured group as the
+  tournament calendar source. Real submission must still use every configured
+  group through `run once`.

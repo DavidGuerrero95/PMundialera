@@ -35,7 +35,11 @@ def test_schedule_command_returns_all_next_matches(monkeypatch) -> None:  # type
     kickoff = now + timedelta(minutes=70)
 
     class FakeClient:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
         def list_matches(self, group: str) -> list[Match]:
+            self.calls.append(group)
             return [
                 Match(
                     match_id="49",
@@ -63,8 +67,9 @@ def test_schedule_command_returns_all_next_matches(monkeypatch) -> None:  # type
         def now(self) -> datetime:
             return now
 
-    monkeypatch.setenv("GOLPREDICTOR_GROUPS", "Mundial CoreX")
-    monkeypatch.setattr(cli, "build_golpredictor_client", lambda settings: FakeClient())
+    fake_client = FakeClient()
+    monkeypatch.setenv("GOLPREDICTOR_GROUPS", "Mundial CoreX,Mundial FIFA 2026")
+    monkeypatch.setattr(cli, "build_golpredictor_client", lambda settings: fake_client)
     monkeypatch.setattr(cli, "SystemClock", FakeClock)
     get_settings.cache_clear()
     runner = CliRunner()
@@ -74,5 +79,8 @@ def test_schedule_command_returns_all_next_matches(monkeypatch) -> None:  # type
     get_settings.cache_clear()
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
+    assert fake_client.calls == ["Mundial CoreX"]
+    assert payload["configured_groups"] == ["Mundial CoreX", "Mundial FIFA 2026"]
+    assert payload["schedule_groups"] == ["Mundial CoreX"]
     assert payload["next_match"]["match_id"] == "49"
     assert [match["match_id"] for match in payload["next_matches"]] == ["49", "50"]

@@ -270,10 +270,12 @@ def run_schedule(
 ) -> None:
     settings = get_settings()
     client = build_golpredictor_client(settings)
+    configured_groups = settings.configured_groups()
+    schedule_groups = configured_groups[:1]
     try:
         matches = [
             match
-            for group in settings.configured_groups()
+            for group in schedule_groups
             for match in client.list_matches(group)
         ]
     finally:
@@ -293,6 +295,8 @@ def run_schedule(
             "in_window": decision.in_window,
             "sleep_seconds": decision.sleep_seconds,
             "reason": decision.reason,
+            "configured_groups": configured_groups,
+            "schedule_groups": schedule_groups,
             "next_match": None
             if next_match is None
             else _schedule_match_payload(next_match),

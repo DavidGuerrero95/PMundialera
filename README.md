@@ -175,6 +175,9 @@ detectar partidos recientes que ya entraron en ventana sin envio registrado.
 Cuando varios partidos comparten hora, `run schedule` y el heartbeat exponen
 `next_matches` con todos los partidos del mismo kickoff o todos los activos en la
 ventana. `next_match` se conserva solo como resumen compatible.
+Para reducir latencia, `run schedule` toma el calendario del primer grupo
+configurado como fuente de fixtures; `run once` sigue enviando el mismo marcador
+en todos los grupos configurados.
 
 Auditar cobertura de envios recientes:
 
