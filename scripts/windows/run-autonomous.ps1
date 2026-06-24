@@ -58,6 +58,7 @@ function Write-PMundialeraHeartbeat {
         $payload.sleep_seconds = $Schedule.sleep_seconds
         $payload.reason = $Schedule.reason
         $payload.next_match = $Schedule.next_match
+        $payload.next_matches = $Schedule.next_matches
     }
     $payload |
         ConvertTo-Json -Depth 8 |
@@ -161,7 +162,18 @@ try {
                     -TimeoutSeconds $CycleTimeoutSeconds
                 $schedule = $scheduleOutput | ConvertFrom-Json
                 $nextMatch = "none"
-                if ($null -ne $schedule.next_match) {
+                $nextMatches = @()
+                if ($null -ne $schedule.next_matches) {
+                    $nextMatches = @($schedule.next_matches)
+                }
+                if ($nextMatches.Count -gt 0) {
+                    $nextMatch = (
+                        $nextMatches |
+                            ForEach-Object {
+                                "{0} [{1}] at {2}" -f $_.match, $_.group, $_.kickoff
+                            }
+                    ) -join "; "
+                } elseif ($null -ne $schedule.next_match) {
                     $nextMatch = "{0} at {1}" -f $schedule.next_match.match, $schedule.next_match.kickoff
                 }
                 Write-Output (

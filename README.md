@@ -172,6 +172,9 @@ ventana de 35 minutos y duerme hasta ese momento. Dentro de una ventana activa u
 el intervalo corto configurado. El runner escribe un heartbeat local en
 `.pmundialera/watch-heartbeat.json` y ejecuta una auditoria de cobertura para
 detectar partidos recientes que ya entraron en ventana sin envio registrado.
+Cuando varios partidos comparten hora, `run schedule` y el heartbeat exponen
+`next_matches` con todos los partidos del mismo kickoff o todos los activos en la
+ventana. `next_match` se conserva solo como resumen compatible.
 
 Auditar cobertura de envios recientes:
 

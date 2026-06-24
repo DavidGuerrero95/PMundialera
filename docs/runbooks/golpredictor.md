@@ -152,6 +152,12 @@ and `confidence`. For debugging, inspect the local SQLite
 `expected_points_candidates`. A real `--submit` run still writes only inside the
 configured 35-minute window.
 
+`run schedule` returns `next_match` for backward-compatible display and
+`next_matches` for the real operational set. When several matches share kickoff,
+or when multiple matches are already inside the active submission window,
+`next_matches` must contain all of them so the operator does not mistake the
+single summary match for the full workload.
+
 When several matches share the same kickoff, `run once` processes all configured
 groups by unique match first, not by completing one group at a time. This avoids
 missing the second pool while Codex is still researching another match on the

@@ -15,3 +15,6 @@
 - The watcher must write `.pmundialera/watch-heartbeat.json` and run
   `pmundialera run audit --json` so missed recent submission windows are visible
   without manual SQLite/log inspection.
+- `run schedule` and the watcher heartbeat must expose `next_matches` when
+  several matches share kickoff or are simultaneously active. Treat `next_match`
+  as a compatibility summary only; never infer that it is the full workload.

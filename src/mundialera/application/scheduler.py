@@ -10,6 +10,7 @@ from mundialera.domain.models import Match
 class ScheduleDecision:
     now: datetime
     next_match: Match | None
+    next_matches: tuple[Match, ...]
     in_window: bool
     sleep_seconds: int
     reason: str
@@ -40,6 +41,7 @@ def plan_next_wake(
         return ScheduleDecision(
             now=now,
             next_match=active[0],
+            next_matches=tuple(active),
             in_window=True,
             sleep_seconds=active_poll_seconds,
             reason="active submission window",
@@ -48,12 +50,14 @@ def plan_next_wake(
         return ScheduleDecision(
             now=now,
             next_match=None,
+            next_matches=(),
             in_window=False,
             sleep_seconds=idle_poll_seconds,
             reason="no upcoming matches found",
         )
     next_match = upcoming[0]
     assert next_match.kickoff is not None
+    next_matches = tuple(match for match in upcoming if match.kickoff == next_match.kickoff)
     wake_at = next_match.kickoff - window - timedelta(seconds=pre_window_buffer_seconds)
     seconds_until_wake = int((wake_at - now).total_seconds())
     if seconds_until_wake <= active_poll_seconds:
@@ -65,6 +69,7 @@ def plan_next_wake(
     return ScheduleDecision(
         now=now,
         next_match=next_match,
+        next_matches=next_matches,
         in_window=False,
         sleep_seconds=max(1, sleep_seconds),
         reason=reason,

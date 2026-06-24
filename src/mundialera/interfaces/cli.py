@@ -295,14 +295,10 @@ def run_schedule(
             "reason": decision.reason,
             "next_match": None
             if next_match is None
-            else {
-                "match_id": next_match.match_id,
-                "match": next_match.label,
-                "kickoff": next_match.kickoff.isoformat()
-                if next_match.kickoff is not None
-                else None,
-                "group": next_match.group,
-            },
+            else _schedule_match_payload(next_match),
+            "next_matches": [
+                _schedule_match_payload(match) for match in decision.next_matches
+            ],
         }
     )
 
@@ -383,6 +379,15 @@ def _coverage_issue_to_dict(issue: SubmissionCoverageIssue) -> dict[str, object]
         "platform_prediction": platform_prediction.label()
         if platform_prediction is not None
         else None,
+    }
+
+
+def _schedule_match_payload(match: Match) -> dict[str, object]:
+    return {
+        "match_id": match.match_id,
+        "match": match.label,
+        "kickoff": match.kickoff.isoformat() if match.kickoff is not None else None,
+        "group": match.group,
     }
 
 
