@@ -179,3 +179,59 @@ def test_learning_memory_deduplicates_repeated_same_group_match_outcomes(tmp_pat
     service.settle_groups(["Mundial CoreX"])
 
     assert "Settled predictions: 1" in store.load_learning_memory()
+
+
+def test_learning_memory_deduplicates_same_real_match_across_groups(tmp_path: Path) -> None:
+    store = SqlitePredictionStore(tmp_path, timezone_name="America/Bogota")
+    for group_name in ("Mundial CoreX", "Mundial FIFA 2026"):
+        match = Match(
+            match_id="24",
+            kickoff=None,
+            home=Team("Escocia"),
+            away=Team("Brasil"),
+            group=group_name,
+        )
+        prediction = Prediction(
+            match=match,
+            primary=Scoreline(1, 2),
+            hedge=Scoreline(1, 2),
+            confidence=0.62,
+            rationale=["away favorite"],
+        )
+        store.record_prediction(
+            prediction,
+            SubmissionResult(
+                match=match,
+                scoreline=prediction.primary,
+                submitted=True,
+                dry_run=False,
+                message="submitted",
+            ),
+        )
+    service = FeedbackService(
+        fixtures=type(
+            "MultiGroupFixtures",
+            (),
+            {
+                "list_matches": lambda self, group_name: [
+                    Match(
+                        match_id="24",
+                        kickoff=None,
+                        home=Team("Escocia"),
+                        away=Team("Brasil"),
+                        group=group_name,
+                        result=Scoreline(0, 3),
+                        points=5,
+                    )
+                ]
+            },
+        )(),
+        store=store,
+        now=datetime(2026, 6, 24, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    service.settle_groups(["Mundial CoreX", "Mundial FIFA 2026"])
+
+    memory = store.load_learning_memory()
+    assert "Settled predictions: 1" in memory
+    assert memory.count("Escocia - Brasil") == 1

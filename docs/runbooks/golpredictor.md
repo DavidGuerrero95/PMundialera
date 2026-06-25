@@ -132,6 +132,11 @@ can consider higher-variance scorelines such as 3-2, 2-3, 4-1, or 4-0, but only
 when the scoreline distribution, team form, market/ranking, squad quality,
 availability, attacking ceiling, defensive weakness, or star-player context
 supports that upside. It still blocks winner changes against strong favorites.
+`metadata.strategy_memory` also stores a latest-matchday overlay. If the latest
+settled block shows margin underestimation, the selector raises margin pressure
+without turning every match into BTTS. Clear favorite plus low underdog xG/BTTS
+is treated as clean-sheet margin upside, while a moderate favorite in an open
+BTTS profile needs additional support before jumping to a two-goal margin.
 
 ## Pre-submit verification
 
@@ -198,6 +203,8 @@ The local feedback state lives in `.pmundialera/pmundialera.sqlite3`.
 - `metadata.learning_memory`: compact lessons injected into future Codex prompts
 - `metadata.tournament_state`: current team/tournament form injected into future research
 - `metadata.strategy_memory`: recent 24-match strategy performance for risk mode
+  plus latest-matchday recency overlay for total, margin, draw and repeated-bucket
+  pressure
 
 Prediction records include probabilities and guardrail flags so future analysis
 can improve calibration without overfitting to one match. Tournament state is

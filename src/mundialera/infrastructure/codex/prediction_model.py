@@ -560,6 +560,14 @@ def _build_prediction_prompt(
           total/margen cuando el EP esta cerca; si hubo falsos empates, no uses
           empate por incertidumbre; si los buckets 1-0, 1-1 o 2-1 se repiten,
           exige que ganen claramente por EP antes de mantenerlos.
+        - La agresividad debe ser direccional: si el favorito es claro, el rival
+          tiene xG bajo y BTTS bajo, el upside correcto es margen con porteria a
+          cero, no un 2-1 automatico. Si el favorito es moderado y ambos equipos
+          tienen xG/BTTS altos, no saltes a margen de dos goles sin soporte de
+          forma, mercado, plantel o debilidad defensiva especifica.
+        - La memoria reciente de la ultima jornada pesa como overlay: si ayer se
+          subestimo el margen, abre margen cuando el perfil lo permita; si no hay
+          soporte de goles del underdog, no conviertas esa presion en BTTS.
         - En fase final, si el equipo ya mostro su estado real en el Mundial,
           puedes inclinarte mas a 3-1, 1-3, 3-2, 2-3, 4-1 o 4-0 solo si el
           perfil de goles, forma, rival, plantel y mercado lo sostienen. No uses
@@ -944,20 +952,15 @@ def _star_player_signals_from_brief(brief: ResearchBrief) -> list[str]:
         "goleiro",
         "goles",
         "jugadores",
-        "mercado",
         "min.",
         "minutos",
         "penaltis",
-        "puntos",
-        "sustituciones",
         "titular",
-        "valores",
     )
     player_signal_categories = {
         "player_context",
         "availability",
         "tactics",
-        "market",
         "news",
     }
     signals: list[str] = []
@@ -978,14 +981,16 @@ def _star_player_signals_from_brief(brief: ResearchBrief) -> list[str]:
     for item in brief.structured_evidence:
         text = _sanitize_context_text(f"{item.category.value}: {item.title}. {item.summary}")
         normalized = text.casefold()
-        if item.category.value == "player_context" or (
+        if (
             item.category.value in player_signal_categories
             and any(term in normalized for term in player_signal_terms)
+            and _looks_player_specific(normalized)
         ):
             add_signal(text)
 
     for raw_signal in brief.evidence:
-        if any(term in raw_signal.casefold() for term in terms):
+        normalized = raw_signal.casefold()
+        if any(term in normalized for term in terms) and _looks_player_specific(normalized):
             add_signal(raw_signal)
 
     return signals
@@ -1076,6 +1081,41 @@ def _is_generic_metric_reference(value: str) -> bool:
         "footystats",
     )
     return any(marker in normalized for marker in generic_markers)
+
+
+def _looks_player_specific(value: str) -> bool:
+    player_detail_markers = (
+        "asistencia",
+        "capitan",
+        "capitán",
+        "convocado",
+        "desequilibrante",
+        "estrella",
+        "figura",
+        "goleador",
+        "gol",
+        "jugador clave",
+        "key player",
+        "lesion",
+        "lesión",
+        "min.",
+        "minutos",
+        "penal",
+        "sancionado",
+        "suspendido",
+        "titular",
+    )
+    generic_markers = (
+        "plantilla completa",
+        "valores de mercado",
+        "market values",
+        "tabla de posiciones",
+        "estadisticas para equipos",
+        "estadísticas para equipos",
+    )
+    return any(marker in value for marker in player_detail_markers) and not any(
+        marker in value for marker in generic_markers
+    )
 
 
 def _star_player_signals_from_memory(learning_memory: str, *, match_label: str) -> list[str]:

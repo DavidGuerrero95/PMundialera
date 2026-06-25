@@ -88,6 +88,35 @@ def test_strategy_memory_summarizes_recent_unique_underestimation_patterns() -> 
     assert round_trip.margin_pressure is True
     assert round_trip.draw_penalty_active is True
     assert round_trip.bucket_penalty_active is True
+    assert round(round_trip.recent_under_margin_rate, 2) == 0.60
+
+
+def test_strategy_memory_uses_latest_matchday_as_recency_overlay() -> None:
+    tz = ZoneInfo("America/Bogota")
+    old_day = datetime(2026, 6, 23, tzinfo=tz)
+    latest_day = datetime(2026, 6, 24, tzinfo=tz)
+    outcomes = [
+        _outcome(1, Scoreline(2, 0), Scoreline(2, 0), points=10),
+        _outcome(2, Scoreline(1, 0), Scoreline(1, 0), points=10),
+        _outcome(3, Scoreline(1, 2), Scoreline(1, 2), points=10),
+        _outcome(4, Scoreline(2, 1), Scoreline(2, 1), points=10),
+        _outcome(5, Scoreline(2, 1), Scoreline(4, 1), points=5),
+        _outcome(6, Scoreline(1, 2), Scoreline(0, 3), points=5),
+        _outcome(7, Scoreline(1, 0), Scoreline(3, 1), points=5),
+    ]
+    dated = [
+        _with_settled_at(outcome, old_day + timedelta(minutes=index))
+        if index < 4
+        else _with_settled_at(outcome, latest_day + timedelta(minutes=index))
+        for index, outcome in enumerate(outcomes)
+    ]
+
+    memory = summarize_recent_performance(dated, limit=24)
+    round_trip = strategy_memory_from_json(memory.to_json())
+
+    assert round(round_trip.under_margin_rate, 2) == 0.43
+    assert round(round_trip.recent_under_margin_rate, 2) == 1.00
+    assert round_trip.margin_pressure is True
 
 
 def _result(scoreline: Scoreline) -> str:
@@ -96,3 +125,24 @@ def _result(scoreline: Scoreline) -> str:
     if scoreline.home < scoreline.away:
         return "away"
     return "draw"
+
+
+def _with_settled_at(
+    outcome: PredictionOutcome,
+    settled_at: datetime,
+) -> PredictionOutcome:
+    return PredictionOutcome(
+        record_id=outcome.record_id,
+        settled_at=settled_at,
+        group=outcome.group,
+        match_id=outcome.match_id,
+        match_label=outcome.match_label,
+        predicted=outcome.predicted,
+        actual=outcome.actual,
+        points=outcome.points,
+        exact_ok=outcome.exact_ok,
+        winner_ok=outcome.winner_ok,
+        home_goals_ok=outcome.home_goals_ok,
+        away_goals_ok=outcome.away_goals_ok,
+        goal_diff_ok=outcome.goal_diff_ok,
+    )

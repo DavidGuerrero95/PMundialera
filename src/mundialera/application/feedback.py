@@ -61,7 +61,7 @@ def build_learning_memory(outcomes: list[PredictionOutcome]) -> str:
             "No settled predictions yet. Prefer conservative confidence and explain uncertainty."
         )
 
-    outcomes = _latest_outcomes_by_group_match(outcomes)
+    outcomes = _latest_outcomes_by_real_match(outcomes)
     total = len(outcomes)
     exact = sum(1 for item in outcomes if item.exact_ok)
     winner = sum(1 for item in outcomes if item.winner_ok)
@@ -205,14 +205,14 @@ def _error_patterns(outcomes: list[PredictionOutcome]) -> list[str]:
     return [f"{label} ({count}x)" for label, count in counter.most_common(5)]
 
 
-def _latest_outcomes_by_group_match(outcomes: list[PredictionOutcome]) -> list[PredictionOutcome]:
-    latest: dict[tuple[str, str], PredictionOutcome] = {}
+def _latest_outcomes_by_real_match(outcomes: list[PredictionOutcome]) -> list[PredictionOutcome]:
+    latest: dict[str, PredictionOutcome] = {}
     for outcome in outcomes:
-        key = (outcome.group, outcome.match_id)
+        key = outcome.match_id or outcome.match_label
         current = latest.get(key)
         if current is None or outcome.settled_at >= current.settled_at:
             latest[key] = outcome
-    return list(latest.values())
+    return sorted(latest.values(), key=lambda item: item.settled_at)
 
 
 def _margin(score: Scoreline) -> int:

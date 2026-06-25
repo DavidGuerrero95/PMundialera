@@ -82,6 +82,14 @@ Use SQLite `metadata.strategy_memory` as a bounded strategy prior over the last
 underestimated totals or margins, penalize unsupported draw uncertainty when
 false draws exceed missed draws, and penalize repeated buckets unless EP clearly
 dominates.
+The strategy memory also carries a latest-matchday overlay. If the most recent
+settled matchday shows margin underestimation, apply that pressure directionally:
+expand favorite margins when xG, 1X2, BTTS, team state, market/ranking, or squad
+quality support it. Do not translate margin pressure into random BTTS. If the
+favorite is clear and the underdog xG/BTTS profile is low, prefer clean-sheet
+margin candidates over repeated 2-1 buckets. If the favorite is only moderate
+and both teams have live xG/BTTS, do not jump to a two-goal margin without
+specific form, market, squad, availability, or defensive-weakness support.
 After each settled matchday, persist current tournament state: team form, goals
 for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
 draw/open-match tournament tempo. Inject into the prompt only match-relevant team

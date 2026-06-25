@@ -309,6 +309,12 @@ mercado o calidad de plantel. En partidos abiertos (`over_2_5 >= 0.58` y
 cuando el EP esta cerca. El feedback de los ultimos 24 partidos unicos asentados
 se guarda en SQLite como `metadata.strategy_memory` y ajusta total, margen,
 empates falsos y repeticion de buckets.
+Esa memoria tambien incluye un overlay de la ultima jornada asentada. Si el
+ultimo bloque mostro subestimacion de margen, el selector abre margen solo en la
+direccion soportada por el perfil: favorito claro + xG/BTTS bajo del rival
+prefiere porteria a cero (`2-0`, `3-0`, `0-2`, `0-3`) en vez de un `2-1`
+automatico; favorito moderado con BTTS alto no salta a margen de dos sin soporte
+adicional de forma, mercado, plantel o fragilidad defensiva.
 
 Para la fase final, `PMUNDIALERA_TOURNAMENT_PHASE=final_phase` aumenta la
 presion efectiva de riesgo porque ya existe mas informacion real de cada equipo

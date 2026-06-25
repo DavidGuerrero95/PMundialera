@@ -508,3 +508,67 @@ def test_final_phase_aggression_still_blocks_winner_change_against_strong_favori
     )
 
     assert scoreline.home > scoreline.away
+
+
+def test_recent_margin_pressure_turns_low_btts_favorite_into_clean_sheet_margin() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.7261,
+        draw=0.1955,
+        away_win=0.0784,
+        over_2_5=0.4177,
+        both_teams_to_score=0.3085,
+        expected_home_goals=1.89,
+        expected_away_goals=0.45,
+    )
+    memory = StrategyMemory(
+        sample_size=24,
+        under_margin_rate=0.4583,
+        recent_sample_size=5,
+        recent_under_margin_rate=0.60,
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(1, 0)
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        pool_context=PoolStrategyContext(tournament_phase="final_phase"),
+        strategy_memory=memory,
+    ) == Scoreline(3, 0)
+
+
+def test_recent_margin_pressure_prefers_away_clean_sheet_over_btts_bucket() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.2586,
+        draw=0.2475,
+        away_win=0.4939,
+        over_2_5=0.5105,
+        both_teams_to_score=0.5349,
+        expected_home_goals=1.10,
+        expected_away_goals=1.61,
+    )
+    memory = StrategyMemory(recent_sample_size=5, recent_under_margin_rate=0.60)
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(0, 1)
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        pool_context=PoolStrategyContext(tournament_phase="final_phase"),
+        strategy_memory=memory,
+    ) == Scoreline(0, 2)
+
+
+def test_modest_open_favorite_does_not_jump_to_two_goal_btts_margin() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.2893,
+        draw=0.2259,
+        away_win=0.4848,
+        over_2_5=0.6331,
+        both_teams_to_score=0.6368,
+        expected_home_goals=1.40,
+        expected_away_goals=1.85,
+    )
+    memory = StrategyMemory(recent_sample_size=5, recent_under_margin_rate=0.60)
+
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        pool_context=PoolStrategyContext(tournament_phase="final_phase"),
+        strategy_memory=memory,
+    ) == Scoreline(1, 2)

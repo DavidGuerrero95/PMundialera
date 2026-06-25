@@ -84,26 +84,47 @@ class StrategyMemory:
     bucket_repetition_rate: float = 0.0
     repeated_buckets: tuple[str, ...] = ()
     average_points: float = 0.0
+    recent_sample_size: int = 0
+    recent_under_total_rate: float = 0.0
+    recent_under_margin_rate: float = 0.0
+    recent_false_draw_rate: float = 0.0
+    recent_missed_draw_rate: float = 0.0
+    recent_bucket_repetition_rate: float = 0.0
+    recent_repeated_buckets: tuple[str, ...] = ()
     updated_at: str | None = None
 
     @property
     def total_high_pressure(self) -> bool:
-        return self.under_total_rate >= 0.50
+        return self.under_total_rate >= 0.50 or (
+            self.recent_sample_size >= 3 and self.recent_under_total_rate >= 0.55
+        )
 
     @property
     def margin_pressure(self) -> bool:
-        return self.under_margin_rate >= 0.50
+        return self.under_margin_rate >= 0.50 or (
+            self.recent_sample_size >= 3 and self.recent_under_margin_rate >= 0.55
+        )
 
     @property
     def draw_penalty_active(self) -> bool:
-        return self.false_draw_rate > self.missed_draw_rate
+        return self.false_draw_rate > self.missed_draw_rate or (
+            self.recent_sample_size >= 3
+            and self.recent_false_draw_rate > self.recent_missed_draw_rate
+        )
 
     @property
     def bucket_penalty_active(self) -> bool:
-        return self.bucket_repetition_rate > 0.35 and bool(self.repeated_buckets)
+        return (
+            self.bucket_repetition_rate > 0.35
+            and bool(self.repeated_buckets)
+        ) or (
+            self.recent_sample_size >= 3
+            and self.recent_bucket_repetition_rate > 0.45
+            and bool(self.recent_repeated_buckets)
+        )
 
     def is_repeated_bucket(self, scoreline: Scoreline) -> bool:
-        return scoreline.label() in self.repeated_buckets
+        return scoreline.label() in {*self.repeated_buckets, *self.recent_repeated_buckets}
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -117,6 +138,15 @@ class StrategyMemory:
             "bucket_repetition_rate": round(self.bucket_repetition_rate, 4),
             "repeated_buckets": list(self.repeated_buckets),
             "average_points": round(self.average_points, 4),
+            "recent_matchday": {
+                "sample_size": self.recent_sample_size,
+                "under_total_rate": round(self.recent_under_total_rate, 4),
+                "under_margin_rate": round(self.recent_under_margin_rate, 4),
+                "false_draw_rate": round(self.recent_false_draw_rate, 4),
+                "missed_draw_rate": round(self.recent_missed_draw_rate, 4),
+                "bucket_repetition_rate": round(self.recent_bucket_repetition_rate, 4),
+                "repeated_buckets": list(self.recent_repeated_buckets),
+            },
             "updated_at": self.updated_at,
             "adjustments": {
                 "boost_high_total": self.total_high_pressure,
@@ -153,6 +183,8 @@ def strategy_memory_from_json(value: str) -> StrategyMemory:
     parsed = json.loads(value)
     if not isinstance(parsed, dict):
         return StrategyMemory()
+    recent = parsed.get("recent_matchday")
+    recent_payload = recent if isinstance(recent, dict) else {}
     return StrategyMemory(
         sample_size=_int(parsed.get("sample_size")),
         under_total_rate=_float(parsed.get("under_total_rate")),
@@ -164,6 +196,15 @@ def strategy_memory_from_json(value: str) -> StrategyMemory:
         bucket_repetition_rate=_float(parsed.get("bucket_repetition_rate")),
         repeated_buckets=tuple(str(item) for item in _list(parsed.get("repeated_buckets"))),
         average_points=_float(parsed.get("average_points")),
+        recent_sample_size=_int(recent_payload.get("sample_size")),
+        recent_under_total_rate=_float(recent_payload.get("under_total_rate")),
+        recent_under_margin_rate=_float(recent_payload.get("under_margin_rate")),
+        recent_false_draw_rate=_float(recent_payload.get("false_draw_rate")),
+        recent_missed_draw_rate=_float(recent_payload.get("missed_draw_rate")),
+        recent_bucket_repetition_rate=_float(recent_payload.get("bucket_repetition_rate")),
+        recent_repeated_buckets=tuple(
+            str(item) for item in _list(recent_payload.get("repeated_buckets"))
+        ),
         updated_at=_optional_str(parsed.get("updated_at")),
     )
 
@@ -183,6 +224,11 @@ def summarize_recent_performance(
     repeated = tuple(score for score, _count in predicted_buckets.most_common(2))
     repeated_count = sum(count for _score, count in predicted_buckets.most_common(2))
     points = [item.points for item in recent if item.points is not None]
+    latest_matchday = _latest_matchday_outcomes(recent)
+    latest_buckets = Counter(item.predicted.label() for item in latest_matchday)
+    latest_repeated = tuple(score for score, _count in latest_buckets.most_common(2))
+    latest_repeated_count = sum(count for _score, count in latest_buckets.most_common(2))
+    latest_total = len(latest_matchday)
 
     return StrategyMemory(
         sample_size=total,
@@ -225,6 +271,43 @@ def summarize_recent_performance(
         bucket_repetition_rate=_rate(repeated_count, total),
         repeated_buckets=repeated,
         average_points=sum(points) / len(points) if points else 0.0,
+        recent_sample_size=latest_total,
+        recent_under_total_rate=_rate(
+            sum(
+                1
+                for item in latest_matchday
+                if _total_goals(item.predicted) < _total_goals(item.actual)
+            ),
+            latest_total,
+        ),
+        recent_under_margin_rate=_rate(
+            sum(
+                1
+                for item in latest_matchday
+                if abs(_goal_diff(item.predicted)) < abs(_goal_diff(item.actual))
+            ),
+            latest_total,
+        ),
+        recent_false_draw_rate=_rate(
+            sum(
+                1
+                for item in latest_matchday
+                if _result_class(item.predicted) == "draw"
+                and _result_class(item.actual) != "draw"
+            ),
+            latest_total,
+        ),
+        recent_missed_draw_rate=_rate(
+            sum(
+                1
+                for item in latest_matchday
+                if _result_class(item.predicted) != "draw"
+                and _result_class(item.actual) == "draw"
+            ),
+            latest_total,
+        ),
+        recent_bucket_repetition_rate=_rate(latest_repeated_count, latest_total),
+        recent_repeated_buckets=latest_repeated,
         updated_at=updated_at.isoformat() if updated_at else None,
     )
 
@@ -242,6 +325,13 @@ def _recent_unique_outcomes(
             latest[key] = outcome
     ordered = sorted(latest.values(), key=lambda item: item.settled_at)
     return ordered[-limit:]
+
+
+def _latest_matchday_outcomes(outcomes: list[PredictionOutcome]) -> list[PredictionOutcome]:
+    if not outcomes:
+        return []
+    latest_day = max(item.settled_at.date() for item in outcomes)
+    return [item for item in outcomes if item.settled_at.date() == latest_day]
 
 
 def _result_class(scoreline: Scoreline) -> str:

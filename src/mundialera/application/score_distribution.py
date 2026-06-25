@@ -372,13 +372,28 @@ def _is_aggressive_high_candidate(
         )
     ):
         return False
+    if _is_modest_favorite_unsupported_high_total(profile, candidate.scoreline):
+        return False
     if (
         final_phase
         and max(candidate.home, candidate.away) == 4
         and not _final_phase_four_goal_supported(profile, candidate.scoreline, strategy_memory)
     ):
         return False
-    if _is_unsupported_three_goal_shutout(profile, candidate.scoreline):
+    if _btts_candidate_conflicts_with_clean_sheet_profile(profile, candidate.scoreline):
+        return False
+    if _is_unsupported_three_goal_shutout(
+        profile,
+        candidate.scoreline,
+        strategy_memory=strategy_memory,
+        final_phase=final_phase,
+    ):
+        return False
+    if _is_modest_favorite_unsupported_comfortable_margin(
+        profile,
+        candidate.scoreline,
+        strategy_memory=strategy_memory,
+    ):
         return False
     if _is_unsupported_comfortable_margin(
         profile,
@@ -531,6 +546,10 @@ def _aggressive_candidate_score(
 
     if _is_open_match(profile) and _is_open_match_upside(candidate.scoreline):
         score += 0.28
+    if _clean_sheet_margin_upside(profile, candidate.scoreline):
+        score += 0.34
+    if _btts_bucket_against_lower_btts_profile(profile, candidate.scoreline):
+        score -= 0.22
     if final_phase and candidate_total >= 5:
         score += 0.12
     if final_phase and candidate_margin >= 2 and _class_probability(
@@ -650,20 +669,105 @@ def _is_aggressive_draw(
 def _is_unsupported_three_goal_shutout(
     profile: ProbabilityProfile,
     scoreline: Scoreline,
+    *,
+    strategy_memory: StrategyMemory,
+    final_phase: bool,
 ) -> bool:
     if scoreline == Scoreline(3, 0):
         return not (
             profile.home_win >= 0.72
             and profile.expected_home_goals >= 2.15
             and profile.expected_away_goals <= 0.75
+        ) and not (
+            final_phase
+            and strategy_memory.margin_pressure
+            and profile.home_win >= 0.70
+            and profile.expected_home_goals >= 1.85
+            and profile.expected_away_goals <= 0.60
+            and profile.both_teams_to_score <= 0.42
         )
     if scoreline == Scoreline(0, 3):
         return not (
             profile.away_win >= 0.72
             and profile.expected_away_goals >= 2.15
             and profile.expected_home_goals <= 0.75
+        ) and not (
+            final_phase
+            and strategy_memory.margin_pressure
+            and profile.away_win >= 0.70
+            and profile.expected_away_goals >= 1.85
+            and profile.expected_home_goals <= 0.60
+            and profile.both_teams_to_score <= 0.42
         )
     return False
+
+
+def _btts_candidate_conflicts_with_clean_sheet_profile(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+) -> bool:
+    if scoreline.home == 0 or scoreline.away == 0:
+        return False
+    favorite = _result_class(scoreline)
+    if favorite == "draw":
+        return False
+    favorite_probability = _class_probability(profile, favorite)
+    underdog_xg = (
+        profile.expected_away_goals if favorite == "home" else profile.expected_home_goals
+    )
+    return (
+        favorite_probability >= 0.60
+        and underdog_xg <= 0.65
+        and profile.both_teams_to_score <= 0.42
+    )
+
+
+def _is_modest_favorite_unsupported_comfortable_margin(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+    *,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    if abs(scoreline.home - scoreline.away) < 2:
+        return False
+    result = _result_class(scoreline)
+    if result == "draw" or _strong_favorite_class(profile) == result:
+        return False
+    class_probability = _class_probability(profile, result)
+    if class_probability >= 0.52:
+        return False
+    favorite_xg = profile.expected_home_goals if result == "home" else profile.expected_away_goals
+    underdog_xg = profile.expected_away_goals if result == "home" else profile.expected_home_goals
+    if _clean_sheet_margin_upside(profile, scoreline):
+        return False
+    if (
+        _is_open_match_upside(scoreline)
+        and profile.over_2_5 >= 0.60
+        and profile.both_teams_to_score >= 0.58
+        and underdog_xg <= 1.15
+    ):
+        return False
+    if (
+        strategy_memory.margin_pressure
+        and favorite_xg >= 1.60
+        and underdog_xg <= 1.35
+        and profile.both_teams_to_score <= 0.60
+    ):
+        return False
+    return True
+
+
+def _is_modest_favorite_unsupported_high_total(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+) -> bool:
+    if scoreline.home + scoreline.away < 5:
+        return False
+    result = _result_class(scoreline)
+    if result == "draw" or _strong_favorite_class(profile) == result:
+        return False
+    favorite_xg = profile.expected_home_goals if result == "home" else profile.expected_away_goals
+    return _class_probability(profile, result) < 0.52 and favorite_xg < 2.05
 
 
 def _is_unsupported_comfortable_margin(
@@ -674,6 +778,8 @@ def _is_unsupported_comfortable_margin(
 ) -> bool:
     if abs(scoreline.home - scoreline.away) < 2:
         return False
+    if strategy_memory.margin_pressure and _clean_sheet_margin_upside(profile, scoreline):
+        return False
     if _strong_favorite_class(profile) == _result_class(scoreline):
         return False
     if (
@@ -683,6 +789,38 @@ def _is_unsupported_comfortable_margin(
     ):
         return False
     return not _is_open_match(profile)
+
+
+def _clean_sheet_margin_upside(profile: ProbabilityProfile, scoreline: Scoreline) -> bool:
+    if scoreline.home == scoreline.away or abs(scoreline.home - scoreline.away) < 2:
+        return False
+    result = _result_class(scoreline)
+    favorite_probability = _class_probability(profile, result)
+    favorite_xg = profile.expected_home_goals if result == "home" else profile.expected_away_goals
+    underdog_xg = profile.expected_away_goals if result == "home" else profile.expected_home_goals
+    clean_sheet_scoreline = (
+        (result == "home" and scoreline.away == 0)
+        or (result == "away" and scoreline.home == 0)
+    )
+    return (
+        clean_sheet_scoreline
+        and favorite_probability >= 0.48
+        and favorite_xg >= 1.55
+        and underdog_xg <= 1.10
+        and profile.both_teams_to_score <= 0.54
+    )
+
+
+def _btts_bucket_against_lower_btts_profile(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+) -> bool:
+    return (
+        scoreline.home > 0
+        and scoreline.away > 0
+        and _result_class(scoreline) != "draw"
+        and profile.both_teams_to_score <= 0.54
+    )
 
 
 def _strong_favorite_class(profile: ProbabilityProfile) -> str | None:
