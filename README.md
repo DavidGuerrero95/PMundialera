@@ -268,6 +268,8 @@ El prompt incluye:
 - calibracion de evidencia, empate y sesgo de favorito
 - memoria de torneo recortada al partido, el grupo cuando este mapeado y un prior
   global compacto; no se inyecta estado detallado de selecciones ajenas
+- presion de clasificacion: puntos, diferencia de gol, mejor tercero, necesidad
+  de ganar, empate util y posible horizonte de eliminacion directa
 - reglas de salida JSON
 
 La seleccion final del marcador no depende solo del texto del LLM. Cuando existe
@@ -328,6 +330,15 @@ en el Mundial. Ese modo permite evaluar candidatos de mayor total o margen como
 torneo, ranking/mercado, plantel, bajas, ataque/defensa y jugadores diferenciales
 lo respaldan. No habilita cambios de ganador contra favoritos fuertes ni
 marcadores amplios sin soporte probabilistico.
+La presion propia del Mundial tambien entra al prompt y al perfil probabilistico:
+si un equipo puede clasificar como mejor tercero, necesita ganar, protege
+diferencia de gol o mira una siguiente ronda de eliminacion directa, el sistema
+lo registra en la memoria de torneo y lo inyecta solo cuando pertenece al partido
+o a su grupo. Esa senal puede subir ritmo, techo ofensivo o riesgo tardio, pero
+no se convierte automaticamente en over/BTTS ni en sorpresa contra un favorito
+fuerte. En partidos imprescindibles se busca exacto de 10 puntos solo cuando el
+EP, la matriz, el estado real del equipo, jugadores determinantes, ranking/mercado
+y disponibilidad sostienen ese marcador; si no, prima volver a sumar puntos.
 
 Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 

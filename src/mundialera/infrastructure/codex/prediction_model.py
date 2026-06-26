@@ -296,11 +296,35 @@ def _build_prediction_prompt(
             "included_teams": [match.home.name, match.away.name],
             "same_group_state": {
                 "standings": [],
-                "qualification_context": None,
+                "qualification_context": (
+                    "use tournament-state evidence when it maps direct qualification, "
+                    "best-third path, must-win pressure, goal-difference pressure or "
+                    "draw-can-help posture for this match group"
+                ),
                 "coverage": "unmapped_from_current_sources",
             },
             "tournament_prior": "compact_global_only",
             "excluded": "detailed state for teams outside this match and group",
+        },
+        "tournament_decision_context": {
+            "best_third_qualification": (
+                "consider only when evidence names the team/group; treat as incentive, "
+                "not as automatic over or favorite fade"
+            ),
+            "must_win": (
+                "teams needing a win can raise tempo, line height, late risk and "
+                "attacking ceiling; keep bounded by team quality and opponent strength"
+            ),
+            "direct_elimination_horizon": (
+                "if qualified, the next stage may be direct elimination; in group-stage "
+                "prediction this is pressure context, while GolPredictor scoring still "
+                "uses the current match rules"
+            ),
+            "points_floor_and_exact_10": (
+                "protect 1X2 points first in poor recent form; chase 10-point exacts "
+                "only in decisive matches when matrix, team state, market/ranking, "
+                "player impact and availability all support the score"
+            ),
         },
         "pool_scoring": {
             "first_round": {
@@ -345,6 +369,12 @@ def _build_prediction_prompt(
             "titularidad",
             "suplencia",
             "lesionados_sancionados_convocados",
+            "mejor_tercero",
+            "necesidad_de_ganar",
+            "clasificacion_directa",
+            "diferencia_de_gol",
+            "proxima_ronda_eliminacion_directa",
+            "partido_imprescindible",
             "buen_ritmo",
             "mal_ritmo",
             "buen_ataque",
@@ -418,6 +448,9 @@ def _build_prediction_prompt(
         - sede, clima, cancha, viaje y logistica
         - historial, ranking/ELO, cuotas, tabla e incentivos
         - emociones de mundial, varianza de debut y sesgos de favorito
+        - clasificacion directa, mejor tercero, obligacion de ganar y diferencia
+          de gol cuando el grupo ya tiene contexto suficiente
+        - posible horizonte de eliminacion directa en la siguiente ronda
         - porteros, atajadas, centrales, laterales y fragilidad defensiva
         - under/over, ambos anotan, ritmo goleador y techo ofensivo
         - ultimos 10 partidos de cada seleccion cuando esten disponibles, con
@@ -445,6 +478,10 @@ def _build_prediction_prompt(
         el estado de estas dimensiones cuando existan en el contexto:
 
         - equipos y estado del torneo
+        - clasificacion directa, opcion de mejor tercero, necesidad real de ganar,
+          diferencia de gol y si un empate sirve o no sirve
+        - horizonte competitivo: si el partido define paso a una ronda de
+          eliminacion directa, tratala como presion contextual
         - jugadores, jugadores diferenciales, noticias personales/profesionales
         - jugadores estrella y desequilibrantes capaces de romper el partido
         - arbitros, faltas, tarjetas, penales y disciplina
@@ -498,6 +535,8 @@ def _build_prediction_prompt(
 
         - estado de los dos equipos del partido
         - estado de equipos del mismo grupo si esta mapeado
+        - puntos, diferencia de gol, presion de clasificacion, posible mejor
+          tercero, partido imprescindible y horizonte de eliminacion directa
         - prior global compacto del torneo: goles, empate, over y BTTS
         - no uses estado detallado de selecciones ajenas al partido o al grupo
         - no uses listas globales de ataques calientes, defensas fragiles,
@@ -537,6 +576,32 @@ def _build_prediction_prompt(
         diferenciales lo soporten. Fase final no significa apostar al azar:
         nunca ignores un favorito fuerte ni cambies de ganador sin clase 1X2
         cercana.
+
+        ## Incentivos de clasificacion Mundial
+
+        Evalua la situacion competitiva como una variable de partido:
+
+        - Si un equipo puede clasificar como mejor tercero, usa ese dato junto con
+          puntos, diferencia de gol y rivales del grupo. No lo trates como permiso
+          automatico para empatar ni como over automatico.
+        - Si un equipo necesita ganar para clasificar o mejorar ruta directa,
+          considera mayor ritmo, mas riesgo al final, presion alta, uso de
+          jugadores determinantes y mayor techo ofensivo, siempre regularizado por
+          calidad real, mercado/ranking, bajas y rival.
+        - Si a un equipo le sirve empatar, modela un partido por estados: puede
+          ser conservador al inicio y abrirse si recibe gol o si el otro necesita
+          diferencia de gol.
+        - Si el clasificado entra a eliminacion directa, no cambies las reglas de
+          puntos del partido actual, pero si considera gestion emocional, tarjetas,
+          titulares, suplentes y jugadores clave.
+        - Para remontar en el pool queremos exactos de 10 puntos en partidos
+          imprescindibles, pero el piso es sumar: conserva el ganador/empate mas
+          probable salvo que el candidato exacto de upside este cerca por EP y la
+          evidencia soporte goles, margen y jugadores diferenciales.
+        - En casos tipo un buen equipo que necesita ganar ante favorito historico,
+          no lo trates como underdog pasivo: sube su techo ofensivo si su estado de
+          torneo, jugadores determinantes, mercado/ranking o diferencia de gol lo
+          sostienen.
 
         ## Reglas de decision
 

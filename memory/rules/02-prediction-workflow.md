@@ -11,6 +11,9 @@ For each match, collect or synthesize:
 - Venue, weather, pitch, travel, and local conditions.
 - Historical head-to-head without over-weighting stale results.
 - World Cup pressure, social, emotional, and tournament incentives.
+- Group qualification pressure: direct qualification, best-third path, must-win
+  state, draw-is-enough state, goal-difference pressure, and direct-elimination
+  horizon for the next round.
 - Recent tournament results to avoid single-source bias.
 - Recent match stats, shots, shots on target, goalkeeper saves, corners, set-piece
   goals, under/over profile, both-teams-to-score profile, and draw probability.
@@ -63,6 +66,12 @@ Do not let uncertainty collapse into a repeated score bucket such as `2-1` or
 not because they are a generic football default. Compact global tournament priors
 must remain weak; global open-profile, hot-attack, or leaky-defense lists are not
 direct BTTS/over evidence unless they describe one of the two match teams.
+Tournament pressure is also scoped. If a team can qualify as best third, needs a
+win, can manage a draw, or is protecting goal difference before a direct
+elimination horizon, inject that only for the match teams and their mapped group.
+Treat it as a bounded incentive: it can raise tempo, late risk, lineup urgency or
+attacking ceiling, but it must not become automatic over/BTTS or an automatic
+favorite fade.
 When market, ranking, squad quality, and attacking ceiling align behind a clear
 favorite, missing secondary categories should lower confidence but must not erase
 the margin signal by default. Evaluate two- and three-goal favorite margins when
@@ -98,11 +107,12 @@ probability is close and recent missed-draw pressure is explicit. Recovering in
 the pool starts by consistently scoring points before taking another aggressive
 swing.
 After each settled matchday, persist current tournament state: team form, goals
-for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
-draw/open-match tournament tempo. Inject into the prompt only match-relevant team
-state, same-group state when mapped, and compact global tournament priors. Do
-not inject detailed state for unrelated teams or global hot/leaky team lists into
-LLM context.
+for/against, points, goal difference, qualification pressure, best-third context,
+knockout horizon, open/closed profile, BTTS profile, hot attacks, leaky defenses,
+and draw/open-match tournament tempo. Inject into the prompt only match-relevant
+team state, same-group state when mapped, and compact global tournament priors.
+Do not inject detailed state for unrelated teams or global hot/leaky team lists
+into LLM context.
 General uncertainty is not draw evidence. Draw must be supported by concrete
 signals such as market draw price, under profile, low block, goalkeeper edge,
 low conversion, fatigue, or matchup constraints. When class gap, market, form,

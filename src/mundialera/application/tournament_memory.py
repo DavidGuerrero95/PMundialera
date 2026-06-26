@@ -36,6 +36,15 @@ class TournamentMemoryResearchAgent(ResearchAgent):
                     source="pmundialera-local-state",
                     tier=SourceTier.AGGREGATOR,
                     confidence=0.82,
+                ),
+                EvidenceItem(
+                    category=EvidenceCategory.TABLE_INCENTIVES,
+                    title="Current qualification pressure",
+                    summary=summary,
+                    url="local://pmundialera/tournament-state",
+                    source="pmundialera-local-state",
+                    tier=SourceTier.AGGREGATOR,
+                    confidence=0.84,
                 )
             ],
         )
@@ -44,6 +53,7 @@ class TournamentMemoryResearchAgent(ResearchAgent):
 def _relevant_lines(memory: str, match: Match) -> list[str]:
     home = match.home.name.casefold()
     away = match.away.name.casefold()
+    group = match.group.casefold() if match.group else None
     relevant: list[str] = []
     for line in memory.splitlines():
         stripped = line.strip()
@@ -57,6 +67,7 @@ def _relevant_lines(memory: str, match: Match) -> list[str]:
             or "draw rate" in lowered
             or "open match rate" in lowered
             or "btts rate" in lowered
+            or (group is not None and f"group {group}" in lowered)
             or home in lowered
             or away in lowered
         ):

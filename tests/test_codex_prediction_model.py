@@ -177,6 +177,12 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert '"jugadores_diferenciables"' in prompt
     assert '"jugadores_estrellas_desequilibrantes"' in prompt
     assert '"lesionados_sancionados_convocados"' in prompt
+    assert '"mejor_tercero"' in prompt
+    assert '"necesidad_de_ganar"' in prompt
+    assert '"proxima_ronda_eliminacion_directa"' in prompt
+    assert '"tournament_decision_context"' in prompt
+    assert '"best_third_qualification"' in prompt
+    assert '"points_floor_and_exact_10"' in prompt
     assert '"jugadores_amarillas_rojas_suspendidos"' in prompt
     assert '"faltas_tarjetas"' in prompt
     assert "estrella desequilibrante" in prompt
@@ -188,6 +194,11 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert "del favorito" in prompt
     assert "Explica cuando se elige upside sobre EP puro" in prompt
     assert "En `pool_context.tournament_phase = final_phase`" in prompt
+    assert "## Incentivos de clasificacion Mundial" in prompt
+    assert "mejor tercero" in prompt
+    assert "necesita ganar" in prompt
+    assert "eliminacion directa" in prompt
+    assert "exactos de 10 puntos" in prompt
     assert "mas varianza controlada" in prompt
     assert "No" in prompt
     assert "No cambies de\nganador sin respaldo probabilistico" in prompt

@@ -147,6 +147,59 @@ def test_probability_profile_uses_leaky_underdog_state_without_defaulting_to_two
     assert scoreline == Scoreline(3, 0)
 
 
+def test_probability_profile_lifts_good_must_win_team_without_overfitting() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("Ecuador"), away=Team("Alemania"))
+    base = calibrate_research_brief(
+        ResearchBrief(
+            match=match,
+            structured_evidence=[
+                _evidence(
+                    EvidenceCategory.RECENT_MATCH_STATS,
+                    "Ecuador: P2 W1 D0 L1, PTS 3, GF 3, GA 2, GD +1. "
+                    "Alemania: P2 W2 D0 L0, PTS 6, GF 4, GA 1, GD +3.",
+                ),
+                _evidence(
+                    EvidenceCategory.RANKING,
+                    "Alemania favorite by ranking, but Ecuador is a good team.",
+                ),
+            ],
+        )
+    )
+    pressure = calibrate_research_brief(
+        ResearchBrief(
+            match=match,
+            structured_evidence=[
+                _evidence(
+                    EvidenceCategory.RECENT_MATCH_STATS,
+                    "Ecuador: P2 W1 D0 L1, PTS 3, GF 3, GA 2, GD +1. "
+                    "Alemania: P2 W2 D0 L0, PTS 6, GF 4, GA 1, GD +3.",
+                ),
+                _evidence(
+                    EvidenceCategory.TABLE_INCENTIVES,
+                    (
+                        "Ecuador: PTS 3, GD +1, qualification_pressure "
+                        "best_third_possible_win_improves_direct_path, scoring_posture "
+                        "needs_win_for_direct_path_best_third_floor. Alemania: PTS 6, "
+                        "qualification_pressure direct_control, scoring_posture can_manage_result."
+                    ),
+                ),
+                _evidence(
+                    EvidenceCategory.RANKING,
+                    "Alemania favorite by ranking, but Ecuador is a good team.",
+                ),
+            ],
+        )
+    )
+
+    base_profile = build_probability_profile(base)
+    pressure_profile = build_probability_profile(pressure)
+
+    assert pressure_profile.expected_home_goals > base_profile.expected_home_goals
+    assert pressure_profile.home_win > base_profile.home_win
+    assert pressure_profile.away_win < base_profile.away_win
+    assert pressure_profile.home_win < 0.50
+
+
 def test_clear_home_favorite_can_expand_margin_beyond_narrow_win() -> None:
     match = Match(match_id="1", kickoff=None, home=Team("Canada"), away=Team("Qatar"))
     brief = calibrate_research_brief(

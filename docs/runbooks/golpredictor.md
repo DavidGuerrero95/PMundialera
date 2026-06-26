@@ -115,6 +115,12 @@ Prompt context must stay scoped: use the two match teams, same-group state when
 mapped, and compact global tournament priors. Do not inject detailed state for
 unrelated teams, global hot-attack lists, global leaky-defense lists, generic xG
 explainers, search failures, or research tasks as football evidence.
+Tournament pressure is match-scoped too. Persist and inject points, goal
+difference, direct qualification path, best-third possibility, must-win pressure,
+draw-is-enough posture, and direct-elimination horizon only for the match teams
+or their mapped group. Treat these as bounded incentives that can affect tempo,
+late risk, lineup urgency, star-player impact, and attacking ceiling; never as
+automatic over/BTTS or automatic upset signals.
 Prediction calibration must also avoid repeated bucket defaults. A `2-1`, `1-0`,
 or any other common scoreline is valid only when the scoreline distribution and
 GolPredictor expected-points optimizer select it. Global open/BTTS tempo is a
@@ -214,9 +220,11 @@ The local feedback state lives in `.pmundialera/pmundialera.sqlite3`.
 Prediction records include probabilities and guardrail flags so future analysis
 can improve calibration without overfitting to one match. Tournament state is
 regenerated from settled GolPredictor results and may summarize team form, goals
-for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
-tournament tempo. Prediction prompts must inject only match-relevant team state,
-same-group state when mapped, and compact global priors.
+for/against, points, goal difference, qualification pressure, best-third context,
+direct-elimination horizon, open/closed profile, BTTS profile, hot attacks,
+leaky defenses, and tournament tempo. Prediction prompts must inject only
+match-relevant team state, same-group state when mapped, and compact global
+priors.
 
 `match_research` stores match/team metadata, raw evidence, structured evidence,
 uncertainties, calibration, probability profile, `scoreline_distribution`,

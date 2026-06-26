@@ -61,6 +61,29 @@ STRONG_FAVORITE_TERMS = (
     "brecha de ranking",
     "ranking gap",
 )
+QUALIFICATION_URGENCY_TERMS = (
+    "must_win",
+    "needs_win",
+    "needs_result",
+    "necesita ganar",
+    "debe ganar",
+    "partido imprescindible",
+    "best_third_possible",
+    "best_third_tiebreaker",
+    "elimination_risk",
+    "riesgo de eliminacion",
+    "needs_win_for_direct_path_best_third_floor",
+    "needs_result_high_urgency",
+)
+QUALIFICATION_CONTROL_TERMS = (
+    "direct_control",
+    "direct_or_best_third_control",
+    "likely_direct_qualified",
+    "can_manage_result",
+    "draw_can_be_useful",
+    "empate sirve",
+    "already qualified",
+)
 UNDERDOG_SIGNAL_TERMS = (
     "underdog",
     "no favorita",
@@ -218,6 +241,13 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
         strength_gap,
         favorite_bias,
     )
+    (
+        qualification_home_xg,
+        qualification_away_xg,
+        qualification_total,
+        qualification_diff,
+    ) = _qualification_adjustments(brief, _signal_corpus(brief), strength_gap)
+    diff += qualification_diff
     total_goals = _clamp(
         2.48
         + over_hits * 0.12
@@ -228,14 +258,26 @@ def build_probability_profile(brief: ResearchBrief) -> ProbabilityProfile:
         1.45,
         3.65,
     )
-    total_goals = _clamp(total_goals + state_total + dominance_total, 1.45, 3.65)
+    total_goals = _clamp(
+        total_goals + state_total + dominance_total + qualification_total,
+        1.45,
+        3.65,
+    )
     expected_home = _clamp(
-        total_goals / 2 + diff * 1.35 + state_home_xg + dominance_home_xg,
+        total_goals / 2
+        + diff * 1.35
+        + state_home_xg
+        + dominance_home_xg
+        + qualification_home_xg,
         0.25,
         3.5,
     )
     expected_away = _clamp(
-        total_goals - expected_home + state_away_xg + dominance_away_xg,
+        total_goals
+        - expected_home
+        + state_away_xg
+        + dominance_away_xg
+        + qualification_away_xg,
         0.25,
         3.5,
     )
@@ -474,6 +516,74 @@ def _dominance_xg_adjustments(
     if signal > 0:
         return dominance, -underdog_reduction, total
     return -underdog_reduction, dominance, total
+
+
+def _qualification_adjustments(
+    brief: ResearchBrief,
+    corpus: str,
+    strength_gap: float,
+) -> tuple[float, float, float, float]:
+    home_urgency = _team_signal_score(
+        corpus,
+        brief.match.home.name,
+        QUALIFICATION_URGENCY_TERMS,
+    )
+    away_urgency = _team_signal_score(
+        corpus,
+        brief.match.away.name,
+        QUALIFICATION_URGENCY_TERMS,
+    )
+    home_control = _team_signal_score(
+        corpus,
+        brief.match.home.name,
+        QUALIFICATION_CONTROL_TERMS,
+    )
+    away_control = _team_signal_score(
+        corpus,
+        brief.match.away.name,
+        QUALIFICATION_CONTROL_TERMS,
+    )
+    if not any((home_urgency, away_urgency, home_control, away_control)):
+        return 0.0, 0.0, 0.0, 0.0
+
+    home_xg = 0.0
+    away_xg = 0.0
+    total = 0.0
+    diff = 0.0
+
+    if home_urgency:
+        pressure = min(home_urgency, 2.0)
+        home_xg += 0.07 * pressure
+        total += 0.035 * pressure
+        if strength_gap >= -0.25:
+            diff += 0.035 * pressure
+    if away_urgency:
+        pressure = min(away_urgency, 2.0)
+        away_xg += 0.07 * pressure
+        total += 0.035 * pressure
+        if strength_gap <= 0.25:
+            diff -= 0.035 * pressure
+
+    if home_control and away_urgency:
+        total += 0.03
+        diff -= 0.03
+    elif home_control and not away_urgency:
+        home_xg -= 0.03
+        total -= 0.03
+
+    if away_control and home_urgency:
+        total += 0.03
+        diff += 0.03
+    elif away_control and not home_urgency:
+        away_xg -= 0.03
+        total -= 0.03
+
+    return (
+        _clamp(home_xg, -0.06, 0.16),
+        _clamp(away_xg, -0.06, 0.16),
+        _clamp(total, -0.06, 0.16),
+        _clamp(diff, -0.10, 0.10),
+    )
 
 
 def _corpus(brief: ResearchBrief) -> str:
