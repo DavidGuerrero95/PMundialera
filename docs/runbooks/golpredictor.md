@@ -137,6 +137,11 @@ settled block shows margin underestimation, the selector raises margin pressure
 without turning every match into BTTS. Clear favorite plus low underdog xG/BTTS
 is treated as clean-sheet margin upside, while a moderate favorite in an open
 BTTS profile needs additional support before jumping to a two-goal margin.
+If that latest played matchday instead shows a winner crash, low average points,
+or systematic over-margin, the selector activates a points-floor posture: it
+prefers the highest expected-points candidate, suppresses extra margin/total
+upside, and only selects a draw when draw probability is close and recent missed
+draw pressure is explicit.
 
 ## Pre-submit verification
 
@@ -204,7 +209,7 @@ The local feedback state lives in `.pmundialera/pmundialera.sqlite3`.
 - `metadata.tournament_state`: current team/tournament form injected into future research
 - `metadata.strategy_memory`: recent 24-match strategy performance for risk mode
   plus latest-matchday recency overlay for total, margin, draw and repeated-bucket
-  pressure
+  pressure, including the points-floor flag after poor recent matchdays
 
 Prediction records include probabilities and guardrail flags so future analysis
 can improve calibration without overfitting to one match. Tournament state is

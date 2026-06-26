@@ -119,6 +119,59 @@ def test_strategy_memory_uses_latest_matchday_as_recency_overlay() -> None:
     assert round_trip.margin_pressure is True
 
 
+def test_strategy_memory_can_group_latest_matchday_by_played_date() -> None:
+    settled_day = datetime(2026, 6, 26, tzinfo=ZoneInfo("America/Bogota"))
+    outcomes = [
+        _with_settled_at(_outcome(1, Scoreline(2, 1), Scoreline(2, 1), points=10), settled_day),
+        _with_settled_at(_outcome(2, Scoreline(1, 4), Scoreline(0, 2), points=5), settled_day),
+        _with_settled_at(_outcome(3, Scoreline(1, 3), Scoreline(2, 1), points=0), settled_day),
+    ]
+    played_dates = {
+        outcomes[0].record_id: datetime(2026, 6, 24, tzinfo=ZoneInfo("America/Bogota")).date(),
+        outcomes[1].record_id: datetime(2026, 6, 25, tzinfo=ZoneInfo("America/Bogota")).date(),
+        outcomes[2].record_id: datetime(2026, 6, 25, tzinfo=ZoneInfo("America/Bogota")).date(),
+    }
+
+    memory = summarize_recent_performance(
+        outcomes,
+        limit=24,
+        played_dates=played_dates,
+    )
+
+    assert memory.recent_sample_size == 2
+    assert round(memory.recent_over_margin_rate, 2) == 1.00
+
+
+def test_strategy_memory_activates_points_floor_after_bad_over_margin_day() -> None:
+    latest_day = datetime(2026, 6, 25, tzinfo=ZoneInfo("America/Bogota"))
+    outcomes = [
+        _with_settled_at(
+            _outcome(1, Scoreline(1, 4), Scoreline(0, 2), points=5),
+            latest_day + timedelta(minutes=1),
+        ),
+        _with_settled_at(
+            _outcome(2, Scoreline(1, 3), Scoreline(2, 1), points=0),
+            latest_day + timedelta(minutes=2),
+        ),
+        _with_settled_at(
+            _outcome(3, Scoreline(2, 1), Scoreline(1, 1), points=2),
+            latest_day + timedelta(minutes=3),
+        ),
+        _with_settled_at(
+            _outcome(4, Scoreline(1, 0), Scoreline(0, 0), points=2),
+            latest_day + timedelta(minutes=4),
+        ),
+    ]
+
+    memory = summarize_recent_performance(outcomes, limit=24)
+
+    assert round(memory.recent_winner_accuracy, 2) == 0.25
+    assert round(memory.recent_over_margin_rate, 2) == 1.00
+    assert round(memory.recent_average_points, 2) == 2.25
+    assert memory.points_floor_active is True
+    assert memory.margin_pressure is False
+
+
 def _result(scoreline: Scoreline) -> str:
     if scoreline.home > scoreline.away:
         return "home"

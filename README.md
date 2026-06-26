@@ -315,6 +315,11 @@ direccion soportada por el perfil: favorito claro + xG/BTTS bajo del rival
 prefiere porteria a cero (`2-0`, `3-0`, `0-2`, `0-3`) en vez de un `2-1`
 automatico; favorito moderado con BTTS alto no salta a margen de dos sin soporte
 adicional de forma, mercado, plantel o fragilidad defensiva.
+Si la ultima jornada muestra caida de ganador, bajo promedio de puntos o exceso
+de margen, se activa un modo de piso de puntos. En ese modo el selector vuelve
+al lider de `expected_pool_points`, evita saltos agresivos de margen/total y
+solo toma empates cuando la probabilidad esta cerca y la memoria reciente muestra
+empates omitidos. La prioridad pasa a volver a sumar puntos de forma constante.
 
 Para la fase final, `PMUNDIALERA_TOURNAMENT_PHASE=final_phase` aumenta la
 presion efectiva de riesgo porque ya existe mas informacion real de cada equipo

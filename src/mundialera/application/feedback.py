@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import date, datetime
 
 from mundialera.application.pool_strategy import summarize_recent_performance
 from mundialera.application.tournament_state import build_tournament_state_memory
@@ -43,8 +43,15 @@ class FeedbackService:
                 outcomes.append(_build_outcome(record, match, self._now))
         count = self._store.record_outcomes(outcomes)
         settled_outcomes = self._store.load_outcomes()
+        played_dates = _played_dates_by_record_id(records)
         self._store.write_learning_memory(build_learning_memory(settled_outcomes))
-        self._store.write_strategy_memory(build_strategy_memory(settled_outcomes, self._now))
+        self._store.write_strategy_memory(
+            build_strategy_memory(
+                settled_outcomes,
+                self._now,
+                played_dates=played_dates,
+            )
+        )
         self._store.write_tournament_state_memory(build_tournament_state_memory(all_matches))
         return count
 
@@ -113,8 +120,25 @@ def build_learning_memory(outcomes: list[PredictionOutcome]) -> str:
     return "\n".join(lines)
 
 
-def build_strategy_memory(outcomes: list[PredictionOutcome], updated_at: datetime) -> str:
-    return summarize_recent_performance(outcomes, updated_at=updated_at).to_json()
+def build_strategy_memory(
+    outcomes: list[PredictionOutcome],
+    updated_at: datetime,
+    *,
+    played_dates: dict[str, date] | None = None,
+) -> str:
+    return summarize_recent_performance(
+        outcomes,
+        updated_at=updated_at,
+        played_dates=played_dates,
+    ).to_json()
+
+
+def _played_dates_by_record_id(records: list[PredictionRecord]) -> dict[str, date]:
+    return {
+        record.record_id: record.kickoff.date()
+        for record in records
+        if record.kickoff is not None
+    }
 
 
 def _build_outcome(

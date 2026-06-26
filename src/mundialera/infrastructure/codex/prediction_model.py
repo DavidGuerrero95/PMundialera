@@ -568,6 +568,11 @@ def _build_prediction_prompt(
         - La memoria reciente de la ultima jornada pesa como overlay: si ayer se
           subestimo el margen, abre margen cuando el perfil lo permita; si no hay
           soporte de goles del underdog, no conviertas esa presion en BTTS.
+        - Si `strategy_memory.adjustments.protect_points_floor` es verdadero,
+          prioriza sumar puntos: vuelve al lider por expected_pool_points, evita
+          saltos de margen/total, no cambies ganador por narrativa y solo acepta
+          empate cuando la probabilidad de empate este cerca y la memoria reciente
+          muestre empates omitidos.
         - En fase final, si el equipo ya mostro su estado real en el Mundial,
           puedes inclinarte mas a 3-1, 1-3, 3-2, 2-3, 4-1 o 4-0 solo si el
           perfil de goles, forma, rival, plantel y mercado lo sostienen. No uses

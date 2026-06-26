@@ -311,6 +311,8 @@ def _aggressive_high_scoreline(
 ) -> Scoreline:
     leader = candidates[0]
     memory = strategy_memory or StrategyMemory()
+    if memory.points_floor_active:
+        return _points_floor_scoreline(profile, candidates, memory)
     resolved_risk_pressure = _final_phase_risk_pressure(
         risk_pressure,
         final_phase=final_phase,
@@ -341,6 +343,24 @@ def _aggressive_high_scoreline(
         reverse=True,
     )
     return viable[0].scoreline
+
+
+def _points_floor_scoreline(
+    profile: ProbabilityProfile,
+    candidates: list[ExpectedPointsCandidate],
+    strategy_memory: StrategyMemory,
+) -> Scoreline:
+    leader = candidates[0]
+    if _recent_missed_draw_pressure(profile, strategy_memory):
+        for candidate in candidates[:12]:
+            if _result_class(candidate.scoreline) != "draw":
+                continue
+            if candidate.expected_pool_points < leader.expected_pool_points - 0.45:
+                continue
+            if profile.draw < 0.24:
+                continue
+            return candidate.scoreline
+    return leader.scoreline
 
 
 def _is_aggressive_high_candidate(
@@ -663,6 +683,19 @@ def _is_aggressive_draw(
         and profile.draw >= 0.28
         and profile.over_2_5 >= 0.60
         and profile.both_teams_to_score >= 0.58
+    )
+
+
+def _recent_missed_draw_pressure(
+    profile: ProbabilityProfile,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    favorite_probability = max(profile.home_win, profile.away_win)
+    return (
+        strategy_memory.recent_sample_size >= 4
+        and strategy_memory.recent_missed_draw_rate >= 0.25
+        and favorite_probability - profile.draw <= 0.20
+        and profile.over_2_5 <= 0.58
     )
 
 

@@ -572,3 +572,53 @@ def test_modest_open_favorite_does_not_jump_to_two_goal_btts_margin() -> None:
         pool_context=PoolStrategyContext(tournament_phase="final_phase"),
         strategy_memory=memory,
     ) == Scoreline(1, 2)
+
+
+def test_points_floor_mode_returns_expected_points_leader_after_bad_margin_day() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.1212,
+        draw=0.1559,
+        away_win=0.7229,
+        over_2_5=0.7201,
+        both_teams_to_score=0.6034,
+        expected_home_goals=1.04,
+        expected_away_goals=2.63,
+    )
+    memory = StrategyMemory(
+        recent_sample_size=6,
+        recent_winner_accuracy=0.3333,
+        recent_over_margin_rate=0.8333,
+        recent_average_points=3.17,
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(1, 2)
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        pool_context=PoolStrategyContext(tournament_phase="final_phase"),
+        strategy_memory=memory,
+    ) == Scoreline(1, 2)
+
+
+def test_points_floor_mode_can_take_close_draw_when_recent_draws_were_missed() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.38,
+        draw=0.30,
+        away_win=0.32,
+        over_2_5=0.45,
+        both_teams_to_score=0.47,
+        expected_home_goals=1.08,
+        expected_away_goals=1.02,
+    )
+    memory = StrategyMemory(
+        recent_sample_size=6,
+        recent_winner_accuracy=0.3333,
+        recent_missed_draw_rate=0.3333,
+        recent_over_margin_rate=0.50,
+        recent_average_points=3.17,
+    )
+
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        pool_context=PoolStrategyContext(tournament_phase="final_phase"),
+        strategy_memory=memory,
+    ) == Scoreline(1, 1)

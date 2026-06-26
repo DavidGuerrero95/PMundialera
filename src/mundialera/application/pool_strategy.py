@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from mundialera.domain.models import PredictionOutcome, Scoreline
@@ -76,7 +77,9 @@ class PoolStrategyContext:
 class StrategyMemory:
     sample_size: int = 0
     under_total_rate: float = 0.0
+    over_total_rate: float = 0.0
     under_margin_rate: float = 0.0
+    over_margin_rate: float = 0.0
     false_draw_rate: float = 0.0
     missed_draw_rate: float = 0.0
     winner_accuracy: float = 0.0
@@ -86,9 +89,13 @@ class StrategyMemory:
     average_points: float = 0.0
     recent_sample_size: int = 0
     recent_under_total_rate: float = 0.0
+    recent_over_total_rate: float = 0.0
     recent_under_margin_rate: float = 0.0
+    recent_over_margin_rate: float = 0.0
     recent_false_draw_rate: float = 0.0
     recent_missed_draw_rate: float = 0.0
+    recent_winner_accuracy: float = 0.0
+    recent_average_points: float = 0.0
     recent_bucket_repetition_rate: float = 0.0
     recent_repeated_buckets: tuple[str, ...] = ()
     updated_at: str | None = None
@@ -101,8 +108,29 @@ class StrategyMemory:
 
     @property
     def margin_pressure(self) -> bool:
+        if self.points_floor_active:
+            return False
         return self.under_margin_rate >= 0.50 or (
             self.recent_sample_size >= 3 and self.recent_under_margin_rate >= 0.55
+        )
+
+    @property
+    def over_margin_pressure(self) -> bool:
+        return self.over_margin_rate >= 0.50 or (
+            self.recent_sample_size >= 3 and self.recent_over_margin_rate >= 0.55
+        )
+
+    @property
+    def points_floor_active(self) -> bool:
+        return self.recent_sample_size >= 4 and (
+            self.recent_over_margin_rate >= 0.50
+            or (
+                self.recent_average_points > 0.0
+                and (
+                    self.recent_winner_accuracy <= 0.50
+                    or self.recent_average_points < 4.0
+                )
+            )
         )
 
     @property
@@ -130,7 +158,9 @@ class StrategyMemory:
         return {
             "sample_size": self.sample_size,
             "under_total_rate": round(self.under_total_rate, 4),
+            "over_total_rate": round(self.over_total_rate, 4),
             "under_margin_rate": round(self.under_margin_rate, 4),
+            "over_margin_rate": round(self.over_margin_rate, 4),
             "false_draw_rate": round(self.false_draw_rate, 4),
             "missed_draw_rate": round(self.missed_draw_rate, 4),
             "winner_accuracy": round(self.winner_accuracy, 4),
@@ -141,9 +171,13 @@ class StrategyMemory:
             "recent_matchday": {
                 "sample_size": self.recent_sample_size,
                 "under_total_rate": round(self.recent_under_total_rate, 4),
+                "over_total_rate": round(self.recent_over_total_rate, 4),
                 "under_margin_rate": round(self.recent_under_margin_rate, 4),
+                "over_margin_rate": round(self.recent_over_margin_rate, 4),
                 "false_draw_rate": round(self.recent_false_draw_rate, 4),
                 "missed_draw_rate": round(self.recent_missed_draw_rate, 4),
+                "winner_accuracy": round(self.recent_winner_accuracy, 4),
+                "average_points": round(self.recent_average_points, 4),
                 "bucket_repetition_rate": round(self.recent_bucket_repetition_rate, 4),
                 "repeated_buckets": list(self.recent_repeated_buckets),
             },
@@ -151,6 +185,8 @@ class StrategyMemory:
             "adjustments": {
                 "boost_high_total": self.total_high_pressure,
                 "boost_margin": self.margin_pressure,
+                "protect_points_floor": self.points_floor_active,
+                "penalize_over_margin": self.over_margin_pressure,
                 "penalize_false_draws": self.draw_penalty_active,
                 "penalize_repeated_buckets": self.bucket_penalty_active,
             },
@@ -188,7 +224,9 @@ def strategy_memory_from_json(value: str) -> StrategyMemory:
     return StrategyMemory(
         sample_size=_int(parsed.get("sample_size")),
         under_total_rate=_float(parsed.get("under_total_rate")),
+        over_total_rate=_float(parsed.get("over_total_rate")),
         under_margin_rate=_float(parsed.get("under_margin_rate")),
+        over_margin_rate=_float(parsed.get("over_margin_rate")),
         false_draw_rate=_float(parsed.get("false_draw_rate")),
         missed_draw_rate=_float(parsed.get("missed_draw_rate")),
         winner_accuracy=_float(parsed.get("winner_accuracy")),
@@ -198,9 +236,13 @@ def strategy_memory_from_json(value: str) -> StrategyMemory:
         average_points=_float(parsed.get("average_points")),
         recent_sample_size=_int(recent_payload.get("sample_size")),
         recent_under_total_rate=_float(recent_payload.get("under_total_rate")),
+        recent_over_total_rate=_float(recent_payload.get("over_total_rate")),
         recent_under_margin_rate=_float(recent_payload.get("under_margin_rate")),
+        recent_over_margin_rate=_float(recent_payload.get("over_margin_rate")),
         recent_false_draw_rate=_float(recent_payload.get("false_draw_rate")),
         recent_missed_draw_rate=_float(recent_payload.get("missed_draw_rate")),
+        recent_winner_accuracy=_float(recent_payload.get("winner_accuracy")),
+        recent_average_points=_float(recent_payload.get("average_points")),
         recent_bucket_repetition_rate=_float(recent_payload.get("bucket_repetition_rate")),
         recent_repeated_buckets=tuple(
             str(item) for item in _list(recent_payload.get("repeated_buckets"))
@@ -214,8 +256,9 @@ def summarize_recent_performance(
     *,
     limit: int = 24,
     updated_at: datetime | None = None,
+    played_dates: Mapping[str, date] | None = None,
 ) -> StrategyMemory:
-    recent = _recent_unique_outcomes(outcomes, limit=limit)
+    recent = _recent_unique_outcomes(outcomes, limit=limit, played_dates=played_dates)
     total = len(recent)
     if total == 0:
         return StrategyMemory(updated_at=updated_at.isoformat() if updated_at else None)
@@ -224,11 +267,12 @@ def summarize_recent_performance(
     repeated = tuple(score for score, _count in predicted_buckets.most_common(2))
     repeated_count = sum(count for _score, count in predicted_buckets.most_common(2))
     points = [item.points for item in recent if item.points is not None]
-    latest_matchday = _latest_matchday_outcomes(recent)
+    latest_matchday = _latest_matchday_outcomes(recent, played_dates=played_dates)
     latest_buckets = Counter(item.predicted.label() for item in latest_matchday)
     latest_repeated = tuple(score for score, _count in latest_buckets.most_common(2))
     latest_repeated_count = sum(count for _score, count in latest_buckets.most_common(2))
     latest_total = len(latest_matchday)
+    latest_points = [item.points for item in latest_matchday if item.points is not None]
 
     return StrategyMemory(
         sample_size=total,
@@ -240,11 +284,27 @@ def summarize_recent_performance(
             ),
             total,
         ),
+        over_total_rate=_rate(
+            sum(
+                1
+                for item in recent
+                if _total_goals(item.predicted) > _total_goals(item.actual)
+            ),
+            total,
+        ),
         under_margin_rate=_rate(
             sum(
                 1
                 for item in recent
                 if abs(_goal_diff(item.predicted)) < abs(_goal_diff(item.actual))
+            ),
+            total,
+        ),
+        over_margin_rate=_rate(
+            sum(
+                1
+                for item in recent
+                if abs(_goal_diff(item.predicted)) > abs(_goal_diff(item.actual))
             ),
             total,
         ),
@@ -280,11 +340,27 @@ def summarize_recent_performance(
             ),
             latest_total,
         ),
+        recent_over_total_rate=_rate(
+            sum(
+                1
+                for item in latest_matchday
+                if _total_goals(item.predicted) > _total_goals(item.actual)
+            ),
+            latest_total,
+        ),
         recent_under_margin_rate=_rate(
             sum(
                 1
                 for item in latest_matchday
                 if abs(_goal_diff(item.predicted)) < abs(_goal_diff(item.actual))
+            ),
+            latest_total,
+        ),
+        recent_over_margin_rate=_rate(
+            sum(
+                1
+                for item in latest_matchday
+                if abs(_goal_diff(item.predicted)) > abs(_goal_diff(item.actual))
             ),
             latest_total,
         ),
@@ -306,6 +382,13 @@ def summarize_recent_performance(
             ),
             latest_total,
         ),
+        recent_winner_accuracy=_rate(
+            sum(1 for item in latest_matchday if item.winner_ok),
+            latest_total,
+        ),
+        recent_average_points=(
+            sum(latest_points) / len(latest_points) if latest_points else 0.0
+        ),
         recent_bucket_repetition_rate=_rate(latest_repeated_count, latest_total),
         recent_repeated_buckets=latest_repeated,
         updated_at=updated_at.isoformat() if updated_at else None,
@@ -316,6 +399,7 @@ def _recent_unique_outcomes(
     outcomes: list[PredictionOutcome],
     *,
     limit: int,
+    played_dates: Mapping[str, date] | None,
 ) -> list[PredictionOutcome]:
     latest: dict[str, PredictionOutcome] = {}
     for outcome in outcomes:
@@ -323,15 +407,33 @@ def _recent_unique_outcomes(
         current = latest.get(key)
         if current is None or outcome.settled_at >= current.settled_at:
             latest[key] = outcome
-    ordered = sorted(latest.values(), key=lambda item: item.settled_at)
+    ordered = sorted(
+        latest.values(),
+        key=lambda item: (_played_date(item, played_dates), item.settled_at),
+    )
     return ordered[-limit:]
 
 
-def _latest_matchday_outcomes(outcomes: list[PredictionOutcome]) -> list[PredictionOutcome]:
+def _latest_matchday_outcomes(
+    outcomes: list[PredictionOutcome],
+    *,
+    played_dates: Mapping[str, date] | None,
+) -> list[PredictionOutcome]:
     if not outcomes:
         return []
-    latest_day = max(item.settled_at.date() for item in outcomes)
-    return [item for item in outcomes if item.settled_at.date() == latest_day]
+    latest_day = max(_played_date(item, played_dates) for item in outcomes)
+    return [item for item in outcomes if _played_date(item, played_dates) == latest_day]
+
+
+def _played_date(
+    outcome: PredictionOutcome,
+    played_dates: Mapping[str, date] | None,
+) -> date:
+    if played_dates is not None:
+        played_at = played_dates.get(outcome.record_id)
+        if played_at is not None:
+            return played_at
+    return outcome.settled_at.date()
 
 
 def _result_class(scoreline: Scoreline) -> str:

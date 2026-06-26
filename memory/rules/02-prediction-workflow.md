@@ -90,6 +90,13 @@ favorite is clear and the underdog xG/BTTS profile is low, prefer clean-sheet
 margin candidates over repeated 2-1 buckets. If the favorite is only moderate
 and both teams have live xG/BTTS, do not jump to a two-goal margin without
 specific form, market, squad, availability, or defensive-weakness support.
+If the latest matchday shows a winner crash, low average points, or systematic
+over-margin, activate a points-floor posture. In that posture, the selector must
+prefer the highest expected-points candidate, suppress high-margin/high-total
+upside, avoid winner changes by narrative, and only move to a draw when draw
+probability is close and recent missed-draw pressure is explicit. Recovering in
+the pool starts by consistently scoring points before taking another aggressive
+swing.
 After each settled matchday, persist current tournament state: team form, goals
 for/against, open/closed profile, BTTS profile, hot attacks, leaky defenses, and
 draw/open-match tournament tempo. Inject into the prompt only match-relevant team
