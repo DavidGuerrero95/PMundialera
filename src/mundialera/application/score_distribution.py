@@ -351,6 +351,8 @@ def _points_floor_scoreline(
     strategy_memory: StrategyMemory,
 ) -> Scoreline:
     leader = candidates[0]
+    if _favorite_overconfidence_draw_recovery(profile, strategy_memory):
+        return Scoreline(1, 1)
     if _recent_missed_draw_pressure(profile, strategy_memory):
         for candidate in candidates[:12]:
             if _result_class(candidate.scoreline) != "draw":
@@ -361,6 +363,27 @@ def _points_floor_scoreline(
                 continue
             return candidate.scoreline
     return leader.scoreline
+
+
+def _favorite_overconfidence_draw_recovery(
+    profile: ProbabilityProfile,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    favorite_probability = max(profile.home_win, profile.away_win)
+    favorite_xg = max(profile.expected_home_goals, profile.expected_away_goals)
+    underdog_xg = min(profile.expected_home_goals, profile.expected_away_goals)
+    xg_gap = favorite_xg - underdog_xg
+    return (
+        strategy_memory.missed_draw_recovery_active
+        and strategy_memory.recent_over_margin_rate >= 0.50
+        and 0.58 <= favorite_probability <= 0.68
+        and profile.draw >= 0.18
+        and profile.over_2_5 <= 0.58
+        and profile.both_teams_to_score >= 0.47
+        and favorite_xg >= 1.95
+        and 0.75 <= underdog_xg <= 1.05
+        and xg_gap >= 1.05
+    )
 
 
 def _is_aggressive_high_candidate(

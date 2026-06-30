@@ -171,6 +171,7 @@ def build_tournament_state_memory(matches: list[Match]) -> str:
     group_lines = [
         _group_summary_line(group_name, group)
         for group_name, group in sorted(group_states.items(), key=lambda item: item[0])
+        if _is_mapped_tournament_group(group)
     ]
     hot_attacks = [
         state.team
@@ -247,6 +248,12 @@ def _group_summary_line(group_name: str, group: dict[str, TeamTournamentState]) 
         for state in standings
     ]
     return f"- Group {group_name}: " + " | ".join(parts)
+
+
+def _is_mapped_tournament_group(group: dict[str, TeamTournamentState]) -> bool:
+    # GolPredictor pool names can arrive as `match.group`; those include the
+    # whole tournament and must not be injected as World Cup group context.
+    return 2 <= len(group) <= 6
 
 
 def _pct(count: int, total: int) -> str:

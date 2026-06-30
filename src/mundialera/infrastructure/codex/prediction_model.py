@@ -638,6 +638,11 @@ def _build_prediction_prompt(
           saltos de margen/total, no cambies ganador por narrativa y solo acepta
           empate cuando la probabilidad de empate este cerca y la memoria reciente
           muestre empates omitidos.
+        - Si `strategy_memory.adjustments.recover_missed_draws` es verdadero,
+          revisa si el partido se parece al patron reciente de favorito moderado
+          inflado: favorito no fuerte, empate vivo, over contenido, BTTS plausible
+          y brecha xG probablemente exagerada. Solo en ese perfil puede defenderse
+          `1-1`; no lo conviertas en regla general de empate.
         - En fase final, si el equipo ya mostro su estado real en el Mundial,
           puedes inclinarte mas a 3-1, 1-3, 3-2, 2-3, 4-1 o 4-0 solo si el
           perfil de goles, forma, rival, plantel y mercado lo sostienen. No uses

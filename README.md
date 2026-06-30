@@ -322,6 +322,11 @@ de margen, se activa un modo de piso de puntos. En ese modo el selector vuelve
 al lider de `expected_pool_points`, evita saltos agresivos de margen/total y
 solo toma empates cuando la probabilidad esta cerca y la memoria reciente muestra
 empates omitidos. La prioridad pasa a volver a sumar puntos de forma constante.
+Si el bloque mas reciente tiene solo tres partidos pero ya muestra un patron
+severo de favoritos moderados inflados, empates omitidos, bajo promedio y exceso
+de margen/total, la recuperacion se activa antes. En ese caso solo permite `1-1`
+para perfiles muy parecidos: favorito no fuerte, empate vivo, over contenido,
+BTTS plausible y brecha xG del favorito probablemente exagerada.
 
 Para la fase final, `PMUNDIALERA_TOURNAMENT_PHASE=final_phase` aumenta la
 presion efectiva de riesgo porque ya existe mas informacion real de cada equipo
@@ -339,6 +344,9 @@ no se convierte automaticamente en over/BTTS ni en sorpresa contra un favorito
 fuerte. En partidos imprescindibles se busca exacto de 10 puntos solo cuando el
 EP, la matriz, el estado real del equipo, jugadores determinantes, ranking/mercado
 y disponibilidad sostienen ese marcador; si no, prima volver a sumar puntos.
+El grupo de GolPredictor no se interpreta como grupo mundialista. Si el dato de
+grupo no esta realmente mapeado a un grupo compacto del torneo, el prompt recibe
+solo los dos equipos y el prior global compacto.
 
 Codex debe devolver JSON valido, sin Markdown ni texto adicional:
 

@@ -199,6 +199,9 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert "necesita ganar" in prompt
     assert "eliminacion directa" in prompt
     assert "exactos de 10 puntos" in prompt
+    assert "recover_missed_draws" in prompt
+    assert "favorito moderado" in prompt
+    assert "inflado" in prompt
     assert "mas varianza controlada" in prompt
     assert "No" in prompt
     assert "No cambies de\nganador sin respaldo probabilistico" in prompt

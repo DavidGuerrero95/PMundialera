@@ -79,6 +79,34 @@ def test_tournament_state_memory_adds_group_and_best_third_pressure() -> None:
     assert "knockout_horizon direct_elimination_next_if_qualified" in memory
 
 
+def test_tournament_state_memory_does_not_treat_pool_name_as_world_cup_group() -> None:
+    teams = [
+        "Brasil",
+        "Francia",
+        "Argentina",
+        "Mexico",
+        "Paises Bajos",
+        "Marruecos",
+        "Alemania",
+    ]
+    matches = [
+        Match(
+            match_id=str(index),
+            kickoff=None,
+            group="Mundial FIFA 2026",
+            home=Team(home),
+            away=Team(away),
+            result=Scoreline(1, 0),
+        )
+        for index, (home, away) in enumerate(zip(teams, teams[1:], strict=False), start=1)
+    ]
+
+    memory = build_tournament_state_memory(matches)
+
+    assert "Group Mundial FIFA 2026" not in memory
+    assert "- Group state unmapped from current fixtures" in memory
+
+
 def test_tournament_memory_agent_filters_match_relevant_state() -> None:
     memory = "\n".join(
         [

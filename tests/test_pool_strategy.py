@@ -172,6 +172,57 @@ def test_strategy_memory_activates_points_floor_after_bad_over_margin_day() -> N
     assert memory.margin_pressure is False
 
 
+def test_strategy_memory_activates_points_floor_after_three_match_missed_draw_crash() -> None:
+    latest_day = datetime(2026, 6, 29, tzinfo=ZoneInfo("America/Bogota"))
+    outcomes = [
+        _with_settled_at(
+            _outcome(1, Scoreline(2, 1), Scoreline(2, 1), points=10),
+            latest_day + timedelta(minutes=1),
+        ),
+        _with_settled_at(
+            _outcome(2, Scoreline(2, 1), Scoreline(1, 1), points=2),
+            latest_day + timedelta(minutes=2),
+        ),
+        _with_settled_at(
+            _outcome(3, Scoreline(2, 1), Scoreline(1, 1), points=2),
+            latest_day + timedelta(minutes=3),
+        ),
+    ]
+
+    memory = summarize_recent_performance(outcomes, limit=24)
+
+    assert round(memory.recent_winner_accuracy, 2) == 0.33
+    assert round(memory.recent_missed_draw_rate, 2) == 0.67
+    assert round(memory.recent_over_margin_rate, 2) == 0.67
+    assert round(memory.recent_average_points, 2) == 4.67
+    assert memory.missed_draw_recovery_active is True
+    assert memory.points_floor_active is False
+
+
+def test_strategy_memory_activates_points_floor_after_three_low_point_missed_draws() -> None:
+    latest_day = datetime(2026, 6, 29, tzinfo=ZoneInfo("America/Bogota"))
+    outcomes = [
+        _with_settled_at(
+            _outcome(1, Scoreline(2, 1), Scoreline(2, 1), points=2),
+            latest_day + timedelta(minutes=1),
+        ),
+        _with_settled_at(
+            _outcome(2, Scoreline(2, 1), Scoreline(1, 1), points=4),
+            latest_day + timedelta(minutes=2),
+        ),
+        _with_settled_at(
+            _outcome(3, Scoreline(2, 1), Scoreline(1, 1), points=4),
+            latest_day + timedelta(minutes=3),
+        ),
+    ]
+
+    memory = summarize_recent_performance(outcomes, limit=24)
+
+    assert round(memory.recent_average_points, 2) == 3.33
+    assert memory.missed_draw_recovery_active is True
+    assert memory.points_floor_active is True
+
+
 def _result(scoreline: Scoreline) -> str:
     if scoreline.home > scoreline.away:
         return "home"

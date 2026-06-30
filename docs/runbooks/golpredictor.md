@@ -121,6 +121,9 @@ draw-is-enough posture, and direct-elimination horizon only for the match teams
 or their mapped group. Treat these as bounded incentives that can affect tempo,
 late risk, lineup urgency, star-player impact, and attacking ceiling; never as
 automatic over/BTTS or automatic upset signals.
+Do not treat the GolPredictor pool name as tournament group context. If the
+group contains the whole pool instead of a compact real group, same-group state
+must remain unmapped.
 Prediction calibration must also avoid repeated bucket defaults. A `2-1`, `1-0`,
 or any other common scoreline is valid only when the scoreline distribution and
 GolPredictor expected-points optimizer select it. Global open/BTTS tempo is a
@@ -148,6 +151,11 @@ or systematic over-margin, the selector activates a points-floor posture: it
 prefers the highest expected-points candidate, suppresses extra margin/total
 upside, and only selects a draw when draw probability is close and recent missed
 draw pressure is explicit.
+For a severe three-match block, recovery can activate early when the latest
+results show low winner accuracy, low average points, repeated missed draws, and
+overestimated favorite margins/totals. The only draw override added for that
+case is a narrow `1-1` profile: moderate favorite, live draw, contained over,
+plausible BTTS, and an inflated-looking xG gap. It is not a generic draw mode.
 
 ## Pre-submit verification
 

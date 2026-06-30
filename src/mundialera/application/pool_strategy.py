@@ -121,15 +121,40 @@ class StrategyMemory:
         )
 
     @property
+    def missed_draw_recovery_active(self) -> bool:
+        return (
+            self.recent_sample_size >= 3
+            and self.recent_missed_draw_rate >= 0.50
+            and self.recent_false_draw_rate <= 0.10
+            and self.recent_winner_accuracy <= 0.50
+        )
+
+    @property
     def points_floor_active(self) -> bool:
-        return self.recent_sample_size >= 4 and (
-            self.recent_over_margin_rate >= 0.50
-            or (
-                self.recent_average_points > 0.0
-                and (
-                    self.recent_winner_accuracy <= 0.50
-                    or self.recent_average_points < 4.0
+        return (
+            self.recent_sample_size >= 4
+            and (
+                self.recent_over_margin_rate >= 0.50
+                or (
+                    self.recent_average_points > 0.0
+                    and (
+                        self.recent_winner_accuracy <= 0.50
+                        or self.recent_average_points < 4.0
+                    )
                 )
+            )
+        ) or (
+            self.recent_sample_size >= 3
+            and self.recent_average_points > 0.0
+            and self.recent_average_points < 4.0
+            and (
+                self.recent_winner_accuracy <= 0.34
+                or self.missed_draw_recovery_active
+            )
+            and (
+                self.recent_over_margin_rate >= 0.50
+                or self.recent_over_total_rate >= 0.50
+                or self.missed_draw_recovery_active
             )
         )
 
@@ -186,6 +211,7 @@ class StrategyMemory:
                 "boost_high_total": self.total_high_pressure,
                 "boost_margin": self.margin_pressure,
                 "protect_points_floor": self.points_floor_active,
+                "recover_missed_draws": self.missed_draw_recovery_active,
                 "penalize_over_margin": self.over_margin_pressure,
                 "penalize_false_draws": self.draw_penalty_active,
                 "penalize_repeated_buckets": self.bucket_penalty_active,

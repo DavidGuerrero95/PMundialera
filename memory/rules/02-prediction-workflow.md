@@ -106,6 +106,12 @@ upside, avoid winner changes by narrative, and only move to a draw when draw
 probability is close and recent missed-draw pressure is explicit. Recovering in
 the pool starts by consistently scoring points before taking another aggressive
 swing.
+If a three-match latest block already shows severe missed-draw pressure, low
+winner accuracy, low average points, and overestimated favorite margins/totals,
+activate recovery early. For the specific moderate-favorite overconfidence
+profile that just failed, allow `1-1` only when the favorite is not strong,
+draw is live, over is not high, BTTS is plausible, and the favorite xG gap looks
+inflated. Do not turn this into a generic draw rule.
 After each settled matchday, persist current tournament state: team form, goals
 for/against, points, goal difference, qualification pressure, best-third context,
 knockout horizon, open/closed profile, BTTS profile, hot attacks, leaky defenses,
@@ -113,6 +119,9 @@ and draw/open-match tournament tempo. Inject into the prompt only match-relevant
 team state, same-group state when mapped, and compact global tournament priors.
 Do not inject detailed state for unrelated teams or global hot/leaky team lists
 into LLM context.
+Do not treat a GolPredictor pool name such as `Mundial FIFA 2026` as a World Cup
+group. Same-group state is valid only when the mapped group is compact enough to
+look like an actual tournament group; otherwise keep it unmapped.
 General uncertainty is not draw evidence. Draw must be supported by concrete
 signals such as market draw price, under profile, low block, goalkeeper edge,
 low conversion, fatigue, or matchup constraints. When class gap, market, form,
