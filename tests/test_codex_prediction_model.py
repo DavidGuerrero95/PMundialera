@@ -133,6 +133,11 @@ def test_codex_prompt_includes_calibration_payload() -> None:
             under_margin_rate=0.54,
             bucket_repetition_rate=0.50,
             repeated_buckets=("2 - 1", "1 - 1"),
+            recent_sample_size=2,
+            recent_under_total_rate=1.0,
+            recent_under_margin_rate=0.5,
+            recent_winner_accuracy=1.0,
+            recent_average_points=13.0,
         ),
     )
 
@@ -181,6 +186,14 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert '"necesidad_de_ganar"' in prompt
     assert '"proxima_ronda_eliminacion_directa"' in prompt
     assert '"tournament_decision_context"' in prompt
+    assert '"structural_team_context"' in prompt
+    assert '"lookback": "24_months"' in prompt
+    assert '"fortaleza_24_meses"' in prompt
+    assert '"solidez_equipo"' in prompt
+    assert '"tendencia_ataque_defensa_24_meses"' in prompt
+    assert '"cambios_entrenador_ciclo"' in prompt
+    assert '"mejores_jugadores_estado_actual"' in prompt
+    assert '"minutos_club_rol_actual_figuras"' in prompt
     assert '"best_third_qualification"' in prompt
     assert '"points_floor_and_exact_10"' in prompt
     assert '"jugadores_amarillas_rojas_suspendidos"' in prompt
@@ -203,6 +216,13 @@ def test_codex_prompt_includes_calibration_payload() -> None:
     assert "favorito moderado" in prompt
     assert "inflado" in prompt
     assert "mas varianza controlada" in prompt
+    assert "## Fortaleza estructural 24 meses" in prompt
+    assert "solidez real de cada seleccion en los ultimos 24 meses" in prompt
+    assert "cambio de entrenador, ciclo, esquema y convocatoria" in prompt
+    assert "strategy_memory.adjustments.recover_under_totals" in prompt
+    assert "strategy_memory.adjustments.recover_supported_margin" in prompt
+    assert '"recover_under_totals": true' in prompt
+    assert '"recover_supported_margin": true' in prompt
     assert "No" in prompt
     assert "No cambies de\nganador sin respaldo probabilistico" in prompt
     assert "Usa `scoreline_distribution` como unica matriz coherente" in prompt

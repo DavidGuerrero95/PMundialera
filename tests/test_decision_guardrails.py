@@ -120,6 +120,59 @@ def test_guardrails_keep_supported_near_open_two_goal_margin() -> None:
     assert "comfortable-favorite-reduced-by-evidence-guardrail" not in guarded.decision_flags
 
 
+def test_guardrails_keep_supported_clean_sheet_two_goal_margin() -> None:
+    match = Match(match_id="1", kickoff=None, home=Team("Mexico"), away=Team("Ecuador"))
+    brief = ResearchBrief(
+        match=match,
+        calibration=PredictionCalibration(
+            evidence_quality=0.48,
+            draw_risk=0.58,
+            favorite_bias_risk=0.55,
+        ),
+        probability_profile=ProbabilityProfile(
+            home_win=0.5397,
+            draw=0.2435,
+            away_win=0.2167,
+            over_2_5=0.4882,
+            both_teams_to_score=0.5007,
+            expected_home_goals=1.66,
+            expected_away_goals=0.96,
+        ),
+        structured_evidence=[
+            EvidenceItem(
+                category=EvidenceCategory.FORM,
+                title="Team solidity",
+                summary="Mexico has recent clean sheets and stronger structural form.",
+                url="https://example.test/form",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.66,
+            ),
+            EvidenceItem(
+                category=EvidenceCategory.RANKING,
+                title="Ranking and market edge",
+                summary="Mexico has ranking and market support for a controlled win.",
+                url="https://example.test/ranking",
+                source="example.test",
+                tier=SourceTier.GENERIC_WEB,
+                confidence=0.66,
+            ),
+        ],
+    )
+    prediction = Prediction(
+        match=match,
+        primary=Scoreline(2, 0),
+        hedge=Scoreline(2, 0),
+        confidence=0.54,
+        rationale=["supported clean-sheet margin"],
+    )
+
+    guarded = apply_prediction_guardrails(prediction, brief)
+
+    assert guarded.primary == Scoreline(2, 0)
+    assert "comfortable-favorite-reduced-by-evidence-guardrail" not in guarded.decision_flags
+
+
 def test_guardrails_replace_default_draw_hedge_when_over_profile_favors_winner() -> None:
     match = Match(match_id="1", kickoff=None, home=Team("Inglaterra"), away=Team("Croacia"))
     brief = ResearchBrief(

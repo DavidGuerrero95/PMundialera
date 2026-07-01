@@ -18,6 +18,9 @@ For each match, collect or synthesize:
 - Recent match stats, shots, shots on target, goalkeeper saves, corners, set-piece
   goals, under/over profile, both-teams-to-score profile, and draw probability.
 - Ranking/ELO and squad quality gap.
+- Structural team solidity over the last 24 months: attack/defense trend,
+  ranking/ELO movement, coach/cycle changes, tactical continuity, squad
+  continuity, and current status of best players.
 - Market odds and public bias.
 - Referee, cards, penalties, and discipline.
 - Rest, travel, time zone, and fatigue.
@@ -99,6 +102,12 @@ favorite is clear and the underdog xG/BTTS profile is low, prefer clean-sheet
 margin candidates over repeated 2-1 buckets. If the favorite is only moderate
 and both teams have live xG/BTTS, do not jump to a two-goal margin without
 specific form, market, squad, availability, or defensive-weakness support.
+If the latest settled matchday shows correct winners but short totals, activate
+under-total recovery: keep the supported 1X2 class, but allow a near-EP move
+from `1-0`/`0-1` to supported `2-0`/`0-2` or `2-1`/`1-2`. If that same block also
+underestimated margin and the underdog xG/BTTS profile is low, prefer clean-sheet
+margin candidates such as `3-0`/`0-3` when final-phase, xG, ranking/market,
+team solidity, squad quality, or key-player context support them.
 If the latest matchday shows a winner crash, low average points, or systematic
 over-margin, activate a points-floor posture. In that posture, the selector must
 prefer the highest expected-points candidate, suppress high-margin/high-total

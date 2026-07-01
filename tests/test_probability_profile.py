@@ -608,6 +608,58 @@ def test_recent_margin_pressure_prefers_away_clean_sheet_over_btts_bucket() -> N
     ) == Scoreline(0, 2)
 
 
+def test_under_total_recovery_keeps_winner_and_raises_live_btts_bucket() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.3441,
+        draw=0.2530,
+        away_win=0.4029,
+        over_2_5=0.5276,
+        both_teams_to_score=0.5645,
+        expected_home_goals=1.33,
+        expected_away_goals=1.46,
+    )
+    memory = StrategyMemory(
+        recent_sample_size=2,
+        recent_winner_accuracy=1.0,
+        recent_under_total_rate=1.0,
+        recent_under_margin_rate=0.50,
+        recent_average_points=13.0,
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(0, 1)
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        pool_context=PoolStrategyContext(tournament_phase="final_phase"),
+        strategy_memory=memory,
+    ) == Scoreline(1, 2)
+
+
+def test_supported_margin_recovery_prefers_clean_sheet_margin_when_btts_is_low() -> None:
+    profile = ProbabilityProfile(
+        home_win=0.6797,
+        draw=0.1965,
+        away_win=0.1239,
+        over_2_5=0.5280,
+        both_teams_to_score=0.4559,
+        expected_home_goals=2.03,
+        expected_away_goals=0.74,
+    )
+    memory = StrategyMemory(
+        recent_sample_size=2,
+        recent_winner_accuracy=1.0,
+        recent_under_total_rate=1.0,
+        recent_under_margin_rate=0.50,
+        recent_average_points=13.0,
+    )
+
+    assert best_scoreline_by_expected_points(profile) == Scoreline(1, 0)
+    assert best_scoreline_by_pool_strategy(
+        profile,
+        pool_context=PoolStrategyContext(tournament_phase="final_phase"),
+        strategy_memory=memory,
+    ) == Scoreline(3, 0)
+
+
 def test_modest_open_favorite_does_not_jump_to_two_goal_btts_margin() -> None:
     profile = ProbabilityProfile(
         home_win=0.2893,

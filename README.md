@@ -159,7 +159,8 @@ pmundialera run window --group "Mundial CoreX" --submit
 ```
 
 La tarea de Windows usa el mismo flujo con `--submit`; si no hay partido dentro
-de la ventana, no escribe nada.
+de la ventana, no escribe nada. La ventana efectiva cierra 10 minutos antes del
+kickoff, respetando el bloqueo de GolPredictor para cambios tardios.
 
 El watcher tambien ejecuta retroalimentacion en cada ciclo: compara predicciones
 enviadas contra resultados ya publicados, actualiza la base
@@ -169,7 +170,8 @@ esa misma base. Esa memoria entra en el siguiente prompt de Codex.
 La automatizacion de Windows no consulta cada minuto cuando no hay ventana activa:
 primero lee los horarios de GolPredictor, calcula el proximo despertar antes de la
 ventana de 35 minutos y duerme hasta ese momento. Dentro de una ventana activa usa
-el intervalo corto configurado. El runner escribe un heartbeat local en
+el intervalo corto configurado, y al entrar en los ultimos 10 minutos deja de
+considerarla apta para envio. El runner escribe un heartbeat local en
 `.pmundialera/watch-heartbeat.json` y ejecuta una auditoria de cobertura para
 detectar partidos recientes que ya entraron en ventana sin envio registrado.
 Cuando varios partidos comparten hora, `run schedule` y el heartbeat exponen
@@ -270,6 +272,9 @@ El prompt incluye:
   global compacto; no se inyecta estado detallado de selecciones ajenas
 - presion de clasificacion: puntos, diferencia de gol, mejor tercero, necesidad
   de ganar, empate util y posible horizonte de eliminacion directa
+- `structural_team_context`: solidez de los ultimos 24 meses, ranking/ELO,
+  ataque/defensa, cambios de tecnico/ciclo, continuidad tactica y estado actual
+  de mejores jugadores
 - reglas de salida JSON
 
 La seleccion final del marcador no depende solo del texto del LLM. Cuando existe
@@ -317,6 +322,12 @@ direccion soportada por el perfil: favorito claro + xG/BTTS bajo del rival
 prefiere porteria a cero (`2-0`, `3-0`, `0-2`, `0-3`) en vez de un `2-1`
 automatico; favorito moderado con BTTS alto no salta a margen de dos sin soporte
 adicional de forma, mercado, plantel o fragilidad defensiva.
+Si la ultima jornada mostro ganadores correctos pero totales cortos, se activa
+`recover_under_totals`: conserva el ganador/empate soportado y permite subir de
+`1-0`/`0-1` a `2-0`/`0-2` o `2-1`/`1-2` cuando xG, BTTS, ranking/mercado,
+solidez de 24 meses, plantel o figuras lo justifican. Si tambien hubo margen
+corto y el underdog tiene xG/BTTS bajo, `recover_supported_margin` permite
+`3-0`/`0-3` en fase final con soporte real.
 Si la ultima jornada muestra caida de ganador, bajo promedio de puntos o exceso
 de margen, se activa un modo de piso de puntos. En ese modo el selector vuelve
 al lider de `expected_pool_points`, evita saltos agresivos de margen/total y
@@ -370,6 +381,10 @@ reconocidos pesan mas que agregadores o snippets genericos; si faltan alineacion
 lesionados, jugadores clave, minutos recientes, noticias personales/profesionales, cuotas,
 ranking, clima, sede, arbitro, xG/tiros, atajadas, corners, balon parado, under/over,
 ambos anotan o contexto reciente, el prompt exige reflejarlo como gap de evidencia.
+Las consultas de research tambien buscan solidez de 24 meses, tendencia de ataque/defensa,
+cambios de entrenador/ciclo, cambios de convocatoria/esquema y estado actual de las
+figuras. Ese contexto es un prior estructural: pesa mas que una goleada aislada, pero
+menos que alineaciones oficiales, bajas, mercado fresco y la matriz de marcadores.
 Ademas calcula una calibracion explicita de riesgo de empate, sesgo por favorito,
 calidad de evidencia y categorias faltantes antes de seleccionar marcador.
 

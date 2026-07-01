@@ -511,6 +511,8 @@ def _same_class_upside_supported(
         or _strong_favorite_class(profile) == candidate_result
         or strategy_memory.total_high_pressure
         or strategy_memory.margin_pressure
+        or strategy_memory.under_total_recovery_active
+        or strategy_memory.supported_margin_recovery_active
         or (
             final_phase
             and _class_probability(profile, candidate_result) >= 0.46
@@ -576,6 +578,10 @@ def _aggressive_candidate_score(
 
     total_bonus = 0.16 + (0.14 if strategy_memory.total_high_pressure else 0.0)
     margin_bonus = 0.14 + (0.20 if strategy_memory.margin_pressure else 0.0)
+    if strategy_memory.under_total_recovery_active:
+        total_bonus += 0.16
+    if strategy_memory.supported_margin_recovery_active:
+        margin_bonus += 0.16
     total_bonus += risk_pressure * 0.10
     margin_bonus += risk_pressure * 0.10
     if final_phase:
@@ -589,8 +595,16 @@ def _aggressive_candidate_score(
 
     if _is_open_match(profile) and _is_open_match_upside(candidate.scoreline):
         score += 0.28
+    if _supported_btts_winner_bucket(profile, candidate.scoreline, strategy_memory):
+        score += 0.30
     if _clean_sheet_margin_upside(profile, candidate.scoreline):
         score += 0.34
+    if (
+        strategy_memory.supported_margin_recovery_active
+        and _clean_sheet_margin_upside(profile, candidate.scoreline)
+        and abs(candidate.home - candidate.away) >= 2
+    ):
+        score += 0.22
     if _btts_bucket_against_lower_btts_profile(profile, candidate.scoreline):
         score -= 0.22
     if final_phase and candidate_total >= 5:
@@ -612,6 +626,7 @@ def _aggressive_candidate_score(
         strategy_memory.bucket_penalty_active
         and strategy_memory.is_repeated_bucket(candidate.scoreline)
         and leader.expected_pool_points - candidate.expected_pool_points <= 0.35
+        and not _supported_btts_winner_bucket(profile, candidate.scoreline, strategy_memory)
     ):
         score -= 0.30
 
@@ -741,6 +756,13 @@ def _is_unsupported_three_goal_shutout(
             and profile.expected_home_goals >= 1.85
             and profile.expected_away_goals <= 0.60
             and profile.both_teams_to_score <= 0.42
+        ) and not (
+            final_phase
+            and strategy_memory.supported_margin_recovery_active
+            and profile.home_win >= 0.66
+            and profile.expected_home_goals >= 2.00
+            and profile.expected_away_goals <= 0.85
+            and profile.both_teams_to_score <= 0.50
         )
     if scoreline == Scoreline(0, 3):
         return not (
@@ -754,6 +776,13 @@ def _is_unsupported_three_goal_shutout(
             and profile.expected_away_goals >= 1.85
             and profile.expected_home_goals <= 0.60
             and profile.both_teams_to_score <= 0.42
+        ) and not (
+            final_phase
+            and strategy_memory.supported_margin_recovery_active
+            and profile.away_win >= 0.66
+            and profile.expected_away_goals >= 2.00
+            and profile.expected_home_goals <= 0.85
+            and profile.both_teams_to_score <= 0.50
         )
     return False
 
@@ -813,6 +842,23 @@ def _is_modest_favorite_unsupported_comfortable_margin(
     return True
 
 
+def _supported_btts_winner_bucket(
+    profile: ProbabilityProfile,
+    scoreline: Scoreline,
+    strategy_memory: StrategyMemory,
+) -> bool:
+    if scoreline not in {Scoreline(2, 1), Scoreline(1, 2)}:
+        return False
+    result = _result_class(scoreline)
+    return (
+        strategy_memory.under_total_recovery_active
+        and _class_probability(profile, result) >= 0.38
+        and profile.both_teams_to_score >= 0.55
+        and min(profile.expected_home_goals, profile.expected_away_goals) >= 1.15
+        and max(profile.expected_home_goals, profile.expected_away_goals) >= 1.35
+    )
+
+
 def _is_modest_favorite_unsupported_high_total(
     profile: ProbabilityProfile,
     scoreline: Scoreline,
@@ -834,7 +880,10 @@ def _is_unsupported_comfortable_margin(
 ) -> bool:
     if abs(scoreline.home - scoreline.away) < 2:
         return False
-    if strategy_memory.margin_pressure and _clean_sheet_margin_upside(profile, scoreline):
+    if (
+        strategy_memory.margin_pressure
+        or strategy_memory.supported_margin_recovery_active
+    ) and _clean_sheet_margin_upside(profile, scoreline):
         return False
     if _strong_favorite_class(profile) == _result_class(scoreline):
         return False

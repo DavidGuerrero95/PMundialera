@@ -223,6 +223,33 @@ def test_strategy_memory_activates_points_floor_after_three_low_point_missed_dra
     assert memory.points_floor_active is True
 
 
+def test_strategy_memory_recovers_under_totals_when_winners_were_correct() -> None:
+    latest_day = datetime(2026, 6, 30, tzinfo=ZoneInfo("America/Bogota"))
+    outcomes = [
+        _with_settled_at(
+            _outcome(1, Scoreline(0, 1), Scoreline(1, 2), points=7),
+            latest_day + timedelta(minutes=1),
+        ),
+        _with_settled_at(
+            _outcome(2, Scoreline(1, 0), Scoreline(3, 0), points=7),
+            latest_day + timedelta(minutes=2),
+        ),
+    ]
+
+    memory = summarize_recent_performance(outcomes, limit=24)
+    payload = memory.to_payload()
+
+    assert round(memory.recent_winner_accuracy, 2) == 1.00
+    assert round(memory.recent_under_total_rate, 2) == 1.00
+    assert round(memory.recent_under_margin_rate, 2) == 0.50
+    assert round(memory.recent_average_points, 2) == 7.00
+    assert memory.under_total_recovery_active is True
+    assert memory.supported_margin_recovery_active is True
+    assert memory.points_floor_active is False
+    assert payload["adjustments"]["recover_under_totals"] is True
+    assert payload["adjustments"]["recover_supported_margin"] is True
+
+
 def _result(scoreline: Scoreline) -> str:
     if scoreline.home > scoreline.away:
         return "home"

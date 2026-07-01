@@ -208,6 +208,11 @@ class WebSearchResearchAgent(ResearchAgent):
             ),
             QuerySpec(
                 EvidenceCategory.PLAYER_CONTEXT,
+                f"{label} mejores jugadores estado forma lesiones minutos clubes temporada "
+                "2025 2026 titulares figuras mundial 2026",
+            ),
+            QuerySpec(
+                EvidenceCategory.PLAYER_CONTEXT,
                 f"{label} noticias personales profesionales jugadores entrenador "
                 "capitan mundial 2026",
             ),
@@ -217,6 +222,11 @@ class WebSearchResearchAgent(ResearchAgent):
                 "mundial 2026",
             ),
             QuerySpec(
+                EvidenceCategory.TACTICS,
+                f"{label} cambios entrenador esquema convocatoria ciclo ultimos 2 anos "
+                "seleccion mundial 2026",
+            ),
+            QuerySpec(
                 EvidenceCategory.VENUE_WEATHER,
                 f"{label} estadio sede clima cancha hora partido mundial 2026",
             ),
@@ -224,6 +234,11 @@ class WebSearchResearchAgent(ResearchAgent):
                 EvidenceCategory.FORM,
                 f"{match.home.name} forma reciente {match.away.name} "
                 "forma reciente ultimos partidos",
+            ),
+            QuerySpec(
+                EvidenceCategory.FORM,
+                f"{label} ultimos 2 anos ultimos 24 meses rendimiento seleccion "
+                "solidez ataque defensa cambios entrenador",
             ),
             QuerySpec(
                 EvidenceCategory.RECENT_MATCH_STATS,
@@ -248,6 +263,10 @@ class WebSearchResearchAgent(ResearchAgent):
             QuerySpec(
                 EvidenceCategory.RANKING,
                 f"{label} ranking FIFA ELO calidad plantel previo mundial 2026",
+            ),
+            QuerySpec(
+                EvidenceCategory.RANKING,
+                f"{label} ELO FIFA ranking ultimos 2 anos tendencia fortaleza seleccion",
             ),
             QuerySpec(
                 EvidenceCategory.REFEREE_DISCIPLINE,

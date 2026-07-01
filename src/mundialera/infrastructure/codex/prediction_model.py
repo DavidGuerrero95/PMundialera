@@ -306,6 +306,26 @@ def _build_prediction_prompt(
             "tournament_prior": "compact_global_only",
             "excluded": "detailed state for teams outside this match and group",
         },
+        "structural_team_context": {
+            "lookback": "24_months",
+            "purpose": (
+                "use as a structural prior for team solidity, not as a replacement "
+                "for current lineups, injuries, tournament state or market"
+            ),
+            "must_evaluate": [
+                "fortaleza_24_meses",
+                "solidez_equipo",
+                "tendencia_ataque_defensa_24_meses",
+                "cambios_entrenador_ciclo",
+                "cambios_convocatoria_esquema",
+                "mejores_jugadores_estado_actual",
+                "minutos_club_rol_actual_figuras",
+            ],
+            "weighting": (
+                "stronger than one isolated match, weaker than official availability "
+                "and current scoreline distribution"
+            ),
+        },
         "tournament_decision_context": {
             "best_third_qualification": (
                 "consider only when evidence names the team/group; treat as incentive, "
@@ -375,6 +395,13 @@ def _build_prediction_prompt(
             "diferencia_de_gol",
             "proxima_ronda_eliminacion_directa",
             "partido_imprescindible",
+            "fortaleza_24_meses",
+            "solidez_equipo",
+            "tendencia_ataque_defensa_24_meses",
+            "cambios_entrenador_ciclo",
+            "cambios_convocatoria_esquema",
+            "mejores_jugadores_estado_actual",
+            "minutos_club_rol_actual_figuras",
             "buen_ritmo",
             "mal_ritmo",
             "buen_ataque",
@@ -455,6 +482,11 @@ def _build_prediction_prompt(
         - under/over, ambos anotan, ritmo goleador y techo ofensivo
         - ultimos 10 partidos de cada seleccion cuando esten disponibles, con
           mas peso para partidos recientes, competitivos y bajo el tecnico actual
+        - solidez estructural de los ultimos 24 meses: rendimiento, ataque,
+          defensa, ranking/ELO, cambios de tecnico, cambios de convocatoria y
+          continuidad tactica
+        - estado actual de los mejores jugadores: minutos de club, rol real,
+          forma, lesiones, sanciones y si siguen siendo diferenciales
 
         Jerarquia de fuentes:
 
@@ -491,6 +523,8 @@ def _build_prediction_prompt(
         - buen ritmo, mal ritmo, partido abierto o partido cerrado
         - buen ataque, mal ataque, buena defensa y mala defensa
         - porteros, centrales, laterales, balon parado y fragilidad defensiva
+        - fortaleza de 24 meses, solidez del equipo, cambios de ciclo/tecnico,
+          cambios de esquema/convocatoria y estado actual de mejores jugadores
 
         ## Jugadores estrella y desequilibrantes
 
@@ -506,6 +540,25 @@ def _build_prediction_prompt(
         Si una estrella esta disponible y en buen ritmo, puede justificar subir techo
         ofensivo, BTTS u over. Si falta, llega tocada o no inicia, reduce confianza y
         explicalo en `evidence_gaps` o `risk_flags`.
+
+        ## Fortaleza estructural 24 meses
+
+        Usa `structural_team_context` y la evidencia de forma/ranking/tactica para
+        evaluar la solidez real de cada seleccion en los ultimos 24 meses:
+
+        - resultados y rendimiento contra rivales comparables
+        - estabilidad o cambio de entrenador, ciclo, esquema y convocatoria
+        - continuidad de titulares, portero, centrales y columna vertebral
+        - tendencia de ataque/defensa, no solo goles del ultimo partido
+        - estado actual de sus mejores jugadores y minutos competitivos recientes
+
+        Este bloque es un prior estructural. Debe pesar mas que una sola goleada
+        aislada, pero menos que alineaciones oficiales, lesiones/sanciones,
+        mercado fresco y la matriz `scoreline_distribution`. Si un equipo es
+        estructuralmente solido y sus figuras estan disponibles/en ritmo, permite
+        mayor total o margen cuando el EP esta cerca. Si hubo cambio fuerte de
+        ciclo, bajas de figuras o perdida de ritmo, baja techo ofensivo,
+        confianza o margen.
 
         ## Estado de equipo, plantilla y disciplina
 
@@ -625,6 +678,15 @@ def _build_prediction_prompt(
           total/margen cuando el EP esta cerca; si hubo falsos empates, no uses
           empate por incertidumbre; si los buckets 1-0, 1-1 o 2-1 se repiten,
           exige que ganen claramente por EP antes de mantenerlos.
+        - Si `strategy_memory.adjustments.recover_under_totals` es verdadero,
+          no comprimas automaticamente partidos con ganador bien identificado a
+          `1-0` o `0-1`: permite `2-1`, `1-2`, `2-0` o `0-2` cuando xG, BTTS,
+          mercado/ranking, solidez 24 meses o figuras lo sostengan.
+        - Si `strategy_memory.adjustments.recover_supported_margin` es verdadero,
+          abre margen de forma controlada: con favorito claro, bajo xG rival y
+          BTTS bajo, prioriza porteria a cero y margen; con favorito moderado y
+          ambos equipos vivos en xG/BTTS, usa un bucket BTTS ganador solo si la
+          matriz y los jugadores diferenciales lo soportan.
         - La agresividad debe ser direccional: si el favorito es claro, el rival
           tiene xG bajo y BTTS bajo, el upside correcto es margen con porteria a
           cero, no un 2-1 automatico. Si el favorito es moderado y ambos equipos

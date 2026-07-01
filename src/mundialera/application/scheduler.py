@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from mundialera.application.submission_window import (
+    is_submission_lock_closed,
+    is_submission_window_open,
+)
 from mundialera.domain.models import Match
 
 
@@ -25,7 +29,6 @@ def plan_next_wake(
     active_poll_seconds: int,
     pre_window_buffer_seconds: int,
 ) -> ScheduleDecision:
-    window = timedelta(minutes=submission_window_minutes)
     upcoming = [
         match
         for match in matches
@@ -35,7 +38,12 @@ def plan_next_wake(
     active = [
         match
         for match in upcoming
-        if match.kickoff is not None and timedelta() <= match.kickoff - now <= window
+        if match.kickoff is not None
+        and is_submission_window_open(
+            kickoff=match.kickoff,
+            now=now,
+            submission_window_minutes=submission_window_minutes,
+        )
     ]
     if active:
         return ScheduleDecision(
@@ -58,6 +66,16 @@ def plan_next_wake(
     next_match = upcoming[0]
     assert next_match.kickoff is not None
     next_matches = tuple(match for match in upcoming if match.kickoff == next_match.kickoff)
+    if is_submission_lock_closed(kickoff=next_match.kickoff, now=now):
+        return ScheduleDecision(
+            now=now,
+            next_match=next_match,
+            next_matches=next_matches,
+            in_window=False,
+            sleep_seconds=active_poll_seconds,
+            reason="submission lock closed",
+        )
+    window = timedelta(minutes=submission_window_minutes)
     wake_at = next_match.kickoff - window - timedelta(seconds=pre_window_buffer_seconds)
     seconds_until_wake = int((wake_at - now).total_seconds())
     if seconds_until_wake <= active_poll_seconds:

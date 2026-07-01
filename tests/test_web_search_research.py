@@ -67,8 +67,13 @@ def test_web_search_research_includes_player_context_queries() -> None:
 
     assert any(item.category == EvidenceCategory.PLAYER_CONTEXT for item in queries)
     assert any("jugadores estrella desequilibrantes" in item.query for item in queries)
+    assert any("mejores jugadores estado forma" in item.query for item in queries)
     assert any("noticias personales profesionales" in item.query for item in queries)
     assert any("jugadores amarillas rojas suspendidos" in item.query for item in queries)
     assert any("titulares suplentes rotacion ritmo" in item.query for item in queries)
+    assert any("cambios entrenador esquema" in item.query for item in queries)
+    assert any("ultimos 2 anos ultimos 24 meses" in item.query for item in queries)
+    assert any("solidez ataque defensa" in item.query for item in queries)
+    assert any("ELO FIFA ranking ultimos 2 anos" in item.query for item in queries)
     assert any(item.category == EvidenceCategory.RECENT_MATCH_STATS for item in queries)
     assert any("xG tiros atajadas corners" in item.query for item in queries)

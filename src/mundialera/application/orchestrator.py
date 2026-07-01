@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import timedelta
 
 from mundialera.application.decision_guardrails import apply_prediction_guardrails
+from mundialera.application.submission_window import is_submission_window_open
 from mundialera.domain.models import Match, Prediction, SubmissionResult
 from mundialera.domain.ports import (
     Clock,
@@ -43,7 +43,7 @@ class PredictionOrchestrator:
         self._prediction_model = prediction_model
         self._sink = sink
         self._clock = clock
-        self._window = timedelta(minutes=submission_window_minutes)
+        self._submission_window_minutes = submission_window_minutes
         self._prediction_cache: dict[str, Prediction] = {}
         self._recorder = recorder
         self._research_recorder = research_recorder
@@ -72,8 +72,11 @@ class PredictionOrchestrator:
                 skipped.append(f"{match.label}: kickoff unavailable")
                 continue
 
-            delta = match.kickoff - now
-            if timedelta() <= delta <= self._window:
+            if is_submission_window_open(
+                kickoff=match.kickoff,
+                now=now,
+                submission_window_minutes=self._submission_window_minutes,
+            ):
                 if (
                     not dry_run
                     and self._submission_registry is not None
@@ -125,8 +128,11 @@ class PredictionOrchestrator:
                     skipped_by_group[group_name].append(f"{match.label}: kickoff unavailable")
                     continue
 
-                delta = match.kickoff - now
-                if not timedelta() <= delta <= self._window:
+                if not is_submission_window_open(
+                    kickoff=match.kickoff,
+                    now=now,
+                    submission_window_minutes=self._submission_window_minutes,
+                ):
                     skipped_by_group[group_name].append(f"{match.label}: outside submission window")
                     continue
                 if (

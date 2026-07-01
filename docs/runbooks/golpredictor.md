@@ -87,8 +87,10 @@ Stop future automatic starts:
 pmundialera run window --group "Mundial CoreX" --submit
 ```
 
-Real submission is allowed only when kickoff is within the configured 35-minute window
-unless `PMUNDIALERA_SUBMISSION_WINDOW_MINUTES` is overridden.
+Real submission is allowed only when kickoff is within the configured 35-minute
+window and outside the platform lock. By default that means from 35 minutes
+before kickoff until 10 minutes before kickoff; the final 10 minutes are treated
+as closed because GolPredictor may reject late changes.
 
 ## Research quality
 
@@ -96,6 +98,10 @@ Production research uses categorized web queries for availability, individual pl
 personal/professional news, tactics, venue/weather, form, news, market, ranking,
 referee/discipline, table incentives, rest/travel, goalkeepers/defense, recent match stats,
 under/over, both-teams-to-score, corners, and set pieces.
+It also queries 24-month structural team solidity: attack/defense trend,
+ranking/ELO movement, coach/cycle changes, squad/tactical continuity, and the
+current status of each team's best players. This is a structural prior, not a
+replacement for current lineups, injuries, fresh market, or the scoreline matrix.
 Results are deduplicated, enriched with bounded HTML scraping when reachable, and scored by
 source tier before the final Codex prompt is built.
 Each prediction receives calibration signals for draw risk, favorite-bias risk,
@@ -146,6 +152,12 @@ settled block shows margin underestimation, the selector raises margin pressure
 without turning every match into BTTS. Clear favorite plus low underdog xG/BTTS
 is treated as clean-sheet margin upside, while a moderate favorite in an open
 BTTS profile needs additional support before jumping to a two-goal margin.
+If the latest block shows correct winners but short totals, `recover_under_totals`
+keeps the supported 1X2 class but allows a close-EP move from `1-0`/`0-1` to
+supported `2-0`/`0-2` or `2-1`/`1-2`. If margin was short too and the underdog
+xG/BTTS profile is low, `recover_supported_margin` can allow `3-0`/`0-3` in
+final phase when xG, ranking/market, squad quality, 24-month solidity, or
+key-player status support the margin.
 If that latest played matchday instead shows a winner crash, low average points,
 or systematic over-margin, the selector activates a points-floor posture: it
 prefers the highest expected-points candidate, suppresses extra margin/total
@@ -171,7 +183,8 @@ pmundialera run once --dry-run --json
 ```
 
 The JSON preview should include `probabilities`, `decision_flags`, `primary`,
-and `confidence`. For debugging, inspect the local SQLite
+and `confidence`. A live submit cycle should not consider a match active inside
+the final 10 minutes before kickoff. For debugging, inspect the local SQLite
 `match_research` row to verify `scoreline_distribution` and
 `expected_points_candidates`. A real `--submit` run still writes only inside the
 configured 35-minute window.
@@ -223,7 +236,8 @@ The local feedback state lives in `.pmundialera/pmundialera.sqlite3`.
 - `metadata.tournament_state`: current team/tournament form injected into future research
 - `metadata.strategy_memory`: recent 24-match strategy performance for risk mode
   plus latest-matchday recency overlay for total, margin, draw and repeated-bucket
-  pressure, including the points-floor flag after poor recent matchdays
+  pressure, including under-total recovery, supported-margin recovery, and the
+  points-floor flag after poor recent matchdays
 
 Prediction records include probabilities and guardrail flags so future analysis
 can improve calibration without overfitting to one match. Tournament state is
@@ -245,6 +259,9 @@ BTTS, over/under, or match volatility. Dedicated JSON signal fields also track
 team state, likely starters, bench/rotation, availability, individual player
 discipline, and rhythm so the LLM prompt can be audited without parsing generic
 evidence blobs.
+Research and prompts additionally carry structural dimensions for 24-month team
+solidity, attack/defense trend, coach/cycle changes, squad/tactical continuity,
+and best-player current form.
 
 Commands:
 

@@ -23,8 +23,14 @@ def apply_prediction_guardrails(prediction: Prediction, brief: ResearchBrief) ->
             flags.append(f"confidence-capped-at-{max_confidence:.2f}")
             confidence = max_confidence
         if _unsupported_comfortable_favorite(prediction.primary, brief):
+            original_primary = prediction.primary
             primary = _reduce_margin(prediction.primary)
             flags.append("comfortable-favorite-reduced-by-evidence-guardrail")
+            rationale.append(
+                "Decision guardrail changed primary "
+                f"{original_primary.label()} -> {primary.label()} because the "
+                "comfortable favorite margin lacked enough supporting evidence."
+            )
         if profile is not None and _draw_needs_cover(brief, prediction):
             hedge = draw_hedge_from_profile(profile, primary)
             flags.append("draw-risk-covered-in-hedge")
@@ -81,6 +87,8 @@ def _chasing_margin_supported(scoreline: Scoreline, brief: ResearchBrief) -> boo
     profile = brief.probability_profile
     if profile is None:
         return False
+    if _supported_clean_sheet_two_goal_margin(scoreline, brief):
+        return True
     if abs(scoreline.home - scoreline.away) >= 3 and not _has_margin_support(brief):
         return False
     if scoreline.home > scoreline.away:
@@ -111,6 +119,32 @@ def _chasing_margin_supported(scoreline: Scoreline, brief: ResearchBrief) -> boo
         and profile.over_2_5 >= 0.56
         and profile.both_teams_to_score >= 0.58
         and profile.expected_away_goals >= 1.60
+    )
+
+
+def _supported_clean_sheet_two_goal_margin(scoreline: Scoreline, brief: ResearchBrief) -> bool:
+    profile = brief.probability_profile
+    if profile is None or abs(scoreline.home - scoreline.away) != 2:
+        return False
+    if scoreline.home > scoreline.away:
+        favorite_probability = profile.home_win
+        favorite_xg = profile.expected_home_goals
+        underdog_xg = profile.expected_away_goals
+        clean_sheet = scoreline.away == 0
+    elif scoreline.away > scoreline.home:
+        favorite_probability = profile.away_win
+        favorite_xg = profile.expected_away_goals
+        underdog_xg = profile.expected_home_goals
+        clean_sheet = scoreline.home == 0
+    else:
+        return False
+    return (
+        clean_sheet
+        and _has_margin_support(brief)
+        and favorite_probability >= 0.52
+        and favorite_xg >= 1.55
+        and underdog_xg <= 1.05
+        and profile.both_teams_to_score <= 0.54
     )
 
 

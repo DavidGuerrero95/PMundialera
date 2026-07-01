@@ -9,6 +9,8 @@
   successful non-dry-run submission for that group/match, the automation must
   skip it instead of posting the same score every cycle.
 - The configured default window is 35 minutes before kickoff.
+- The effective write window closes at the platform lock: 10 minutes before
+  kickoff. Do not attempt new submissions or edits inside the final 10 minutes.
 - Supported active groups are `Mundial CoreX` and `Mundial FIFA 2026`.
 - Windows production automation should use the scheduled task runner with a
   periodic watchdog trigger. The Startup-folder shortcut is only a fallback.

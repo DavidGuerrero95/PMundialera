@@ -76,6 +76,25 @@ def test_schedule_lists_all_active_matches_inside_window() -> None:
     assert [match.match_id for match in decision.next_matches] == ["a", "b"]
 
 
+def test_schedule_closes_platform_lock_inside_last_ten_minutes() -> None:
+    now = datetime(2026, 6, 15, 12, 0, tzinfo=ZoneInfo("America/Bogota"))
+
+    decision = plan_next_wake(
+        [_match(9, now=now, match_id="locked")],
+        now=now,
+        submission_window_minutes=35,
+        idle_poll_seconds=21600,
+        active_poll_seconds=60,
+        pre_window_buffer_seconds=300,
+    )
+
+    assert decision.in_window is False
+    assert decision.next_match is not None
+    assert decision.next_match.match_id == "locked"
+    assert decision.sleep_seconds == 60
+    assert decision.reason == "submission lock closed"
+
+
 def test_schedule_sleeps_until_before_next_window() -> None:
     now = datetime(2026, 6, 15, 12, 0, tzinfo=ZoneInfo("America/Bogota"))
 

@@ -123,6 +123,12 @@ def test_run_group_window_only_predicts_inside_window() -> None:
         home=Team("Arabia Saudita"),
         away=Team("Uruguay"),
     )
+    platform_locked = Match(
+        match_id="15",
+        kickoff=now + timedelta(minutes=9),
+        home=Team("MÃ©xico"),
+        away=Team("Ecuador"),
+    )
     already_started = Match(
         match_id="12",
         kickoff=now - timedelta(minutes=1),
@@ -131,7 +137,7 @@ def test_run_group_window_only_predicts_inside_window() -> None:
     )
     sink = FakeSink()
     orchestrator = PredictionOrchestrator(
-        fixtures=FakeFixtures([inside, outside, already_started]),
+        fixtures=FakeFixtures([inside, outside, platform_locked, already_started]),
         research_agent=default_research_agent(),
         prediction_model=HeuristicPredictionModel(),
         sink=sink,
@@ -146,6 +152,7 @@ def test_run_group_window_only_predicts_inside_window() -> None:
     assert result.submitted[0].dry_run is True
     assert result.skipped == [
         "Arabia Saudita - Uruguay: outside submission window",
+        "MÃ©xico - Ecuador: outside submission window",
         "Marruecos - Escocia: outside submission window",
     ]
 

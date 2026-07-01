@@ -130,6 +130,22 @@ class StrategyMemory:
         )
 
     @property
+    def under_total_recovery_active(self) -> bool:
+        return (
+            self.recent_sample_size >= 2
+            and self.recent_winner_accuracy >= 0.75
+            and self.recent_under_total_rate >= 0.75
+            and self.recent_average_points >= 6.0
+        )
+
+    @property
+    def supported_margin_recovery_active(self) -> bool:
+        return (
+            self.under_total_recovery_active
+            and self.recent_under_margin_rate >= 0.50
+        )
+
+    @property
     def points_floor_active(self) -> bool:
         return (
             self.recent_sample_size >= 4
@@ -212,6 +228,8 @@ class StrategyMemory:
                 "boost_margin": self.margin_pressure,
                 "protect_points_floor": self.points_floor_active,
                 "recover_missed_draws": self.missed_draw_recovery_active,
+                "recover_under_totals": self.under_total_recovery_active,
+                "recover_supported_margin": self.supported_margin_recovery_active,
                 "penalize_over_margin": self.over_margin_pressure,
                 "penalize_false_draws": self.draw_penalty_active,
                 "penalize_repeated_buckets": self.bucket_penalty_active,
